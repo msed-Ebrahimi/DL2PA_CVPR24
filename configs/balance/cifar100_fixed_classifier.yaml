@@ -1,0 +1,51 @@
+name: Res32_cifar100
+print_freq: 40
+workers: 32
+log_dir: 'logs'
+model_dir: 'ckps'
+
+# dataset & model setting
+dataset: 'cifar100'
+data_path:  './data/data_cifar/' #'./data/cifar/cifar-10-batches-py/'
+num_classes: 100
+#imb_factor: 0.005
+backbone: 'ResNet'
+fixed_classifier: True
+space_dim: 50
+centroid_path: 'Estimated_prototypes/d50_e1000/C100/100centers_50dim.pth'
+#resume: ''
+#head_class_idx:
+#  - 0
+#  - 36
+#med_class_idx:
+#  - 36
+#  - 71
+#tail_class_idx:
+#  - 71
+#  - 100
+
+
+# distributed training
+deterministic: True
+distributed: False
+gpu: 0
+world_size: -1
+rank: -1
+dist_url: 'tcp://224.66.41.62:23456'
+dist_backend: 'nccl'
+multiprocessing_distributed: False
+
+
+
+# Train
+#mode: 'stage1'
+lr: 0.1
+batch_size: 16
+weight_decay: 2e-4
+num_epochs: 250
+momentum: 0.9
+drop1: 100
+drop2: 200
+#cos: False
+#mixup: True
+#alpha: 1.0
