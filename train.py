@@ -194,9 +194,9 @@ def validate(val_loader, model, classifier, criterion, config, logger, dset='tes
 
             feat = model(images)
             labels = target.clone()
-            target = classifier.polars[target]
+            target = classifier.polars[:,target].T
             if config.fixed_classifier:
-                loss = (1.0 - criterion(output, target)).pow(2).sum()
+                loss = (1.0 - criterion(feat, target)).pow(2).sum()
                 output = model.predict(feat,classifier.polars)
             # if config.ETF_classifier:
             #     feat = classifier(feat)
@@ -252,12 +252,13 @@ def validate(val_loader, model, classifier, criterion, config, logger, dset='tes
             if i % config.print_freq == 0:
                 progress.display(i, logger)
         acc_classes = correct / class_num
-        head_acc = acc_classes[config.head_class_idx[0]:config.head_class_idx[1]].mean() * 100
+        # head_acc = acc_classes[config.head_class_idx[0]:config.head_class_idx[1]].mean() * 100
 
-        med_acc = acc_classes[config.med_class_idx[0]:config.med_class_idx[1]].mean() * 100
-        tail_acc = acc_classes[config.tail_class_idx[0]:config.tail_class_idx[1]].mean() * 100
-        logger.info('* Acc@1 {top1.avg:.3f}% Acc@5 {top5.avg:.3f}% HAcc {head_acc:.3f}% MAcc {med_acc:.3f}% TAcc {tail_acc:.3f}%.'.format(top1=top1, top5=top5, head_acc=head_acc, med_acc=med_acc, tail_acc=tail_acc))
-
+        # med_acc = acc_classes[config.med_class_idx[0]:config.med_class_idx[1]].mean() * 100
+        # tail_acc = acc_classes[config.tail_class_idx[0]:config.tail_class_idx[1]].mean() * 100
+        # logger.info('* Acc@1 {top1.avg:.3f}% Acc@5 {top5.avg:.3f}% HAcc {head_acc:.3f}% MAcc {med_acc:.3f}% TAcc {tail_acc:.3f}%.'.format(top1=top1, top5=top5, head_acc=head_acc, med_acc=med_acc, tail_acc=tail_acc))
+        logger.info(
+            '* Acc@1 {top1.avg:.3f}% Acc@5 {top5.avg:.3f}% '.format(top1=top1, top5=top5))
         cal = calibration(true_class, pred_class, confidence, num_bins=15)
 
 
@@ -444,7 +445,7 @@ def main_worker(gpu, ngpus_per_node, config, logger, model_dir):
                                 momentum=config.momentum,
                                 weight_decay=config.weight_decay)
     learning_rate = config.lr
-
+    best_acc1 = -1.0
     for epoch in range(config.num_epochs):
         # if config.distributed:
         #     train_sampler.set_epoch(epoch)
