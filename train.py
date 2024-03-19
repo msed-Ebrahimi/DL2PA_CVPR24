@@ -12,9 +12,9 @@ import torch.utils.data
 import torch.utils.data.distributed
 import torch.nn.functional as F
 import torch
+import pprint
 from utils import config, update_config, create_logger
 from utils import AverageMeter, ProgressMeter, accuracy
-import pprint
 import warnings
 from backbone.balanced.cifar100 import resnet as resnet32_balanced
 from backbone.classifiers import fixed
@@ -37,6 +37,7 @@ def parse_args():
     return args
 
 def train(train_loader, model, classifier, criterion, optimizer, epoch, config, logger):
+
     batch_time = AverageMeter('Time', ':6.3f')
     data_time = AverageMeter('Data', ':6.3f')
     losses = AverageMeter('Loss', ':.3f')
@@ -57,12 +58,14 @@ def train(train_loader, model, classifier, criterion, optimizer, epoch, config, 
 
     for i, (images, target) in enumerate(train_loader):
 
+
         if i > end_steps:
             break
 
         # measure data loading time
         data_time.update(time.time() - end)
         labels = target.clone()
+
         # if torch.cuda.is_available():
         #     images = images.cuda(config.gpu, non_blocking=True)
         #     target = target.cuda(config.gpu, non_blocking=True)
@@ -118,22 +121,22 @@ def train(train_loader, model, classifier, criterion, optimizer, epoch, config, 
         #         loss = criterion(output, target)
 
         nlabels = target.clone()
-        target = classifier.polars[target]
+        target = classifier.polars[:,target].T
         if torch.cuda.is_available():
-            print('cuda is available')
-            images = images.cuda(config.gpu)
-            target = target.cuda(config.gpu)
-        print('temporary input')
+            images = images.cuda(config.gpu, non_blocking=True)
+            target = target.cuda(config.gpu, non_blocking=True)
+
         output = model(images)
         if config.fixed_classifier:
-            model.forward_momentum(output.detach(), nlabels.detach())
+            classifier.forward_momentum(output.detach(), nlabels.detach())
             loss = (1.0 - criterion(output, target)).pow(2).sum()
             output = model.predict(output, classifier.polars)
+
         else:
             output = classifier(output)
             loss = criterion(output, target)
 
-        acc1, acc5 = accuracy(output, labels, topk=(1, 5))
+        acc1, acc5 = accuracy(output, labels.cuda(config.gpu, non_blocking=True), topk=(1, 5))
         losses.update(loss.item(), images.size(0))
         top1.update(acc1[0], images.size(0))
         top5.update(acc5[0], images.size(0))
@@ -336,7 +339,6 @@ def main():
     logger.info('\n' + str(config))
 
     if config.deterministic:
-        print(f'config.deterministic:{config.deterministic}')
         seed = 0
         torch.backends.cudnn.deterministic = True
         torch.backends.cudnn.benchmark = False
@@ -352,14 +354,12 @@ def main():
                       'disable data parallelism.')
 
     if config.dist_url == "env://" and config.world_size == -1:
-        print(f'config.dist_url:{config.dist_url}')
         config.world_size = int(os.environ["WORLD_SIZE"])
 
     config.distributed = config.world_size > 1 or config.multiprocessing_distributed
     ngpus_per_node = torch.cuda.device_count()
 
     if config.multiprocessing_distributed:
-        print(f'config.multiprocessing_distributed:{config.multiprocessing_distributed}')
         # Since we have ngpus_per_node processes per node, the total world_size
         # needs to be adjusted accordingly
         config.world_size = ngpus_per_node * config.world_size
@@ -367,7 +367,6 @@ def main():
         # main_worker process function
         mp.spawn(main_worker, nprocs=ngpus_per_node, args=(ngpus_per_node, config, logger))
     else:
-        print(f'else if ---- config.multiprocessing_distributed:{config.multiprocessing_distributed}')
         # Simply call main_worker function
         main_worker(config.gpu, ngpus_per_node, config, logger, model_dir)
 
@@ -379,12 +378,9 @@ def main_worker(gpu, ngpus_per_node, config, logger, model_dir):
         logger.info("Use GPU: {} for training".format(config.gpu))
 
     if config.distributed:
-        print(f'main worker config.distributed:{config.distributed}')
         if config.dist_url == "env://" and config.rank == -1:
             config.rank = int(os.environ["RANK"])
-            print(f' config.rank:{config.rank}')
         if config.multiprocessing_distributed:
-            print(f'main worker ---> config.multiprocessing_distributed:{config.multiprocessing_distributed}')
             # For multiprocessing distributed training, rank needs to be the
             # global rank among all the processes
             config.rank = config.rank * ngpus_per_node + gpu
@@ -394,7 +390,7 @@ def main_worker(gpu, ngpus_per_node, config, logger, model_dir):
     if config.dataset == 'cifar100' or config.dataset == 'imagenet200':
         model = getattr(resnet32_balanced, config.backbone)(depth=32, output_dims= config.space_dim, multiplier= 1)
         if config.fixed_classifier:
-            print('########   Using a fixed hyperspherical classifier instead of Softmax    ##########')
+            print('########   Using a fixed hyperspherical classifier    ##########')
             classifier = getattr(fixed, 'fixed_Classifier')(feat_in=config.space_dim, num_classes=config.num_classes, centroid_path=config.centroid_path)
         else:
             classifier = getattr(learnable, 'Classifier')(feat_in=config.space_dim, num_classes=config.num_classes)
@@ -425,7 +421,6 @@ def main_worker(gpu, ngpus_per_node, config, logger, model_dir):
             classifier = torch.nn.parallel.DistributedDataParallel(classifier)
 
     elif config.gpu is not None:
-        print('using cuda.set_device')
         torch.cuda.set_device(config.gpu)
         model = model.cuda(config.gpu)
         classifier = classifier.cuda(config.gpu)
@@ -462,7 +457,6 @@ def main_worker(gpu, ngpus_per_node, config, logger, model_dir):
                     param_group['lr'] = learning_rate
 
         # train for one epoch
-
         train(trainloader, model, classifier, criterion, optimizer, epoch, config, logger)
 
         # evaluate on validation set

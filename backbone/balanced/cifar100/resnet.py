@@ -166,7 +166,7 @@ class ResNet(nn.Module):
 
     def predict(self, x,polars):
         x = F.normalize(x, p=2, dim=1)
-        x = torch.mm(x, polars.t().cuda())
+        x = torch.mm(x, polars)
         return x
 
 
