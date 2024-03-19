@@ -16,7 +16,8 @@ import pprint
 from utils import config, update_config, create_logger
 from utils import AverageMeter, ProgressMeter, accuracy
 import warnings
-from backbone.balanced.cifar100 import resnet as resnet32_balanced
+from backbone.balanced.cifar100 import resnet as resnet32_balancedC100
+from backbone.balanced.imagenet200 import resnet as resnet32_balancedIN200
 from backbone.classifiers import fixed
 from backbone.classifiers import learnable
 from utils import dataset, calibration,save_checkpoint
@@ -130,7 +131,7 @@ def train(train_loader, model, classifier, criterion, optimizer, epoch, config, 
         if config.fixed_classifier:
             classifier.forward_momentum(output.detach(), nlabels.detach())
             loss = (1.0 - criterion(output, target)).pow(2).sum()
-            output = model.predict(output, classifier.polars)
+            output = classifier.predict(output)
 
         else:
             output = classifier(output)
@@ -197,7 +198,7 @@ def validate(val_loader, model, classifier, criterion, config, logger, dset='tes
             target = classifier.polars[:,target].T
             if config.fixed_classifier:
                 loss = (1.0 - criterion(feat, target)).pow(2).sum()
-                output = model.predict(feat,classifier.polars)
+                output = classifier.predict(feat)
             # if config.ETF_classifier:
             #     feat = classifier(feat)
             #     output = torch.matmul(feat, cur_M)
@@ -389,7 +390,10 @@ def main_worker(gpu, ngpus_per_node, config, logger, model_dir):
                                 world_size=config.world_size, rank=config.rank)
 
     if config.dataset == 'cifar100' or config.dataset == 'imagenet200':
-        model = getattr(resnet32_balanced, config.backbone)(depth=32, output_dims= config.space_dim, multiplier= 1)
+        if config.dataset == 'cifar100':
+            model = getattr(resnet32_balancedC100, config.backbone)(depth=32, output_dims= config.space_dim, multiplier= 1)
+        else:
+            model = getattr(resnet32_balancedIN200, config.backbone)(depth=32, output_dims=config.space_dim, multiplier=1)
         if config.fixed_classifier:
             print('########   Using a fixed hyperspherical classifier    ##########')
             classifier = getattr(fixed, 'fixed_Classifier')(feat_in=config.space_dim, num_classes=config.num_classes, centroid_path=config.centroid_path)

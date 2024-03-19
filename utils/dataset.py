@@ -56,3 +56,34 @@ def load_cifar100(basedir, batch_size, kwargs):
     return trainloader, testloader
 
 
+#
+# Load the ImageNet-200 dataset.
+#
+def load_imagenet200(basedir, batch_size, kwargs):
+    # Correct basedir.
+    basedir += "imagenet200/"
+
+    # Normalization.
+    mrgb = [0.485, 0.456, 0.406]
+    srgb = [0.229, 0.224, 0.225]
+    normalize = transforms.Normalize(mean=mrgb, std=srgb)
+
+    # Train loader.
+    train_data = datasets.ImageFolder(basedir + "train/",
+                                      transform=transforms.Compose([transforms.RandomCrop(64, 4),
+                                                                    transforms.RandomHorizontalFlip(),
+                                                                    transforms.ToTensor(),
+                                                                    normalize]))
+    trainloader = torch.utils.data.DataLoader(train_data,
+                                              batch_size=batch_size, shuffle=True, **kwargs)
+
+    # Test loader.
+    test_data = datasets.ImageFolder(basedir + "test/",
+                                     transform=transforms.Compose([transforms.ToTensor(),
+                                                                   normalize]))
+    testloader = torch.utils.data.DataLoader(test_data,
+                                             batch_size=batch_size, shuffle=False, **kwargs)
+
+    return trainloader, testloader
+
+

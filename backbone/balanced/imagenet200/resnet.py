@@ -94,14 +94,14 @@ class Bottleneck(nn.Module):
 
 class ResNet(nn.Module):
 
-    def __init__(self, depth, output_dims=10, multiplier=1):
+    def __init__(self, depth, output_dims=10, multiplier=1, polars=None):
         super(ResNet, self).__init__()
         # Model type specifies number of layers for CIFAR-10 model
         assert (depth - 2) % 6 == 0, 'depth should be 6n+2'
         n = (depth - 2) // 6
 
         # Store a copy of the class prototypes.
-
+        self.polars = polars
 
         # if depth >= 44:
         #    block  = Bottleneck
@@ -118,7 +118,7 @@ class ResNet(nn.Module):
         self.layer1 = self._make_layer(block, 16 * multiplier, n)
         self.layer2 = self._make_layer(block, 32 * multiplier, n, stride=2)
         self.layer3 = self._make_layer(block, 64 * multiplier, n, stride=2)
-        self.avgpool = nn.AvgPool2d(8)
+        self.avgpool = nn.AvgPool2d(16)
         self.fc = nn.Linear(64 * multiplier * block.expansion, output_dims)
 
         for m in self.modules():
@@ -128,6 +128,10 @@ class ResNet(nn.Module):
             elif isinstance(m, nn.BatchNorm2d):
                 m.weight.data.fill_(1)
                 m.bias.data.zero_()
+            # elif isinstance(m, nn.Linear):
+            #    n = m.out_features
+            #    m.weight.data.normal_(0, (2. / n) ** 0.5)
+            #    m.weight.data = m.weight.div(m.weight.norm()).data
 
     def _make_layer(self, block, planes, blocks, stride=1):
         downsample = None
@@ -149,7 +153,6 @@ class ResNet(nn.Module):
         return nn.Sequential(*layers)
 
     def forward(self, x):
-
         x = self.conv1(x)
         x = self.bn1(x)
         x = self.relu(x)
@@ -164,7 +167,10 @@ class ResNet(nn.Module):
 
         return x
 
-
+    def predict(self, x):
+        x = F.normalize(x, p=2, dim=1)
+        x = torch.mm(x, self.polars.t().cuda())
+        return x
 
 
 def resnet(**kwargs):

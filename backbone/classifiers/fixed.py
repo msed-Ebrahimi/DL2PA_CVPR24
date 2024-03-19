@@ -75,3 +75,8 @@ class fixed_Classifier(nn.Module):
     def update_fixed_center(self):
         self.polars, idx = self.haungarian()
         return idx
+
+    def predict(self, x):
+        x = F.normalize(x, p=2, dim=1)
+        x = torch.mm(x, self.polars)
+        return x
