@@ -62,7 +62,7 @@ _C.reg_dot_loss = False
 # _C.GivenEw = True  ## valid when reg_dot_loss True
 _C.criterion = 'reg_dot_loss'
 # _C.stat_mode = False
-# _C.reg_lam = 0.0
+_C.reg_lam = 0.0
 
 
 def update_config(cfg, args):

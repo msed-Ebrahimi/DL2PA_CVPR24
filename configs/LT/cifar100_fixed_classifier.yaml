@@ -10,7 +10,6 @@ data_path: './data/data_cifar/'
 num_classes: 100
 imb_factor: 0.02
 backbone: 'resnet32_fe_c100'
-resume: ''
 head_class_idx:
   - 0
   - 36
@@ -22,7 +21,7 @@ tail_class_idx:
   - 100
 fixed_classifier: True
 space_dim: 128
-centroid_path: 'Estimated_prototypes/100centers_25dim.pth'
+centroid_path: 'Estimated_prototypes/100centers_128dim.pth'
 
 # distributed training
 deterministic: False
@@ -37,13 +36,11 @@ multiprocessing_distributed: False
 
 
 # Train
-mode: 'stage1'
 lr: 0.1
 batch_size: 128
 weight_decay: 2e-4
 num_epochs: 200
 momentum: 0.9
-cos: False
 mixup: True
 alpha: 1.0
 

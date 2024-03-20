@@ -77,7 +77,7 @@ def train(train_loader, model, classifier, criterion, optimizer, epoch, config, 
         '''begin long tail'''
         if config.dataset.endswith('LT'):
             if config.fixed_classifier:
-                if config.reg_dot_loss and config.GivenEw:
+                if config.reg_dot_loss:
                     learned_norm = LT_utils.produce_Ew(target, config.num_classes)
                     if config.dataset == 'imagenetLT':
                         cur_M = learned_norm * classifier.module.polars
@@ -155,12 +155,11 @@ def train(train_loader, model, classifier, criterion, optimizer, epoch, config, 
 
 def validate(val_loader, model, classifier, criterion, config, logger, dset='test'):
     batch_time = AverageMeter('Time', ':6.3f')
-    losses = AverageMeter('Loss', ':.3f')
     top1 = AverageMeter('Acc@1', ':6.3f')
     top5 = AverageMeter('Acc@5', ':6.3f')
     progress = ProgressMeter(
         len(val_loader),
-        [batch_time, losses, top1, top5],
+        [batch_time, top1, top5],
         prefix='Eval: ')
 
     # switch to evaluate mode
@@ -180,8 +179,9 @@ def validate(val_loader, model, classifier, criterion, config, logger, dset='tes
                 images = images.cuda(config.gpu, non_blocking=True)
             if torch.cuda.is_available():
                 target = target.cuda(config.gpu, non_blocking=True)
+            labels = target.clone()
 
-            if config.dataset.ends_with('LT'):
+            if config.dataset.endswith('LT'):
                 if config.fixed_classifier:
                     feat = model(images)
                     feat = classifier(feat)
@@ -192,15 +192,12 @@ def validate(val_loader, model, classifier, criterion, config, logger, dset='tes
 
             else:
                 feat = model(images)
-                labels = target.clone()
                 target = classifier.polars[:,target].T
                 if config.fixed_classifier:
-                    loss = (1.0 - criterion(feat, target)).pow(2).sum()
                     output = classifier.predict(feat)
 
             # measure accuracy and record loss
             acc1, acc5 = accuracy(output, labels, topk=(1, 5))
-            losses.update(loss.item(), images.size(0))
             top1.update(acc1[0], images.size(0))
             top5.update(acc5[0], images.size(0))
 
@@ -223,7 +220,7 @@ def validate(val_loader, model, classifier, criterion, config, logger, dset='tes
             if i % config.print_freq == 0:
                 progress.display(i, logger)
         acc_classes = correct / class_num
-        if config.dataset.ends_with('LT'):
+        if config.dataset.endswith('LT'):
             head_acc = acc_classes[config.head_class_idx[0]:config.head_class_idx[1]].mean() * 100
             med_acc = acc_classes[config.med_class_idx[0]:config.med_class_idx[1]].mean() * 100
             tail_acc = acc_classes[config.tail_class_idx[0]:config.tail_class_idx[1]].mean() * 100
@@ -366,7 +363,7 @@ def main_worker(gpu, ngpus_per_node, config, logger, model_dir):
         trainloader, testloader = dataset.ImageNet_LT(config.distributed, root=config.data_path,
                               batch_size=config.batch_size, num_works=config.workers)
 
-    if config.dataset == 'cifar100' or config.dataset == 'imagenet200':
+    if not config.dataset.startswith('imagenet'):
         optimizer = torch.optim.SGD([{"params": model.parameters()},
                                     {"params": classifier.parameters()}], config.lr,
                                     momentum=config.momentum,
@@ -390,21 +387,15 @@ def main_worker(gpu, ngpus_per_node, config, logger, model_dir):
                     param_group['lr'] = lr
         elif config.dataset == 'cifar10LT' or config.dataset == 'cifar100LT' or config.dataset == 'stl10LT' or config.dataset == 'svhnLT' or config.dataset == 'imagenetLT':
             """Sets the learning rate"""
-            if config.cos:
-                lr_min = 0
-                lr_max = config.lr
-                lr = lr_min + 0.5 * (lr_max - lr_min) * (1 + math.cos(epoch / config.num_epochs * 3.1415926535))
-
+            epoch = epoch + 1
+            if epoch <= 5:
+                lr = config.lr * epoch / 5
+            elif epoch > 180:
+                lr = config.lr * 0.01
+            elif epoch > 160:
+                lr = config.lr * 0.1
             else:
-                epoch = epoch + 1
-                if epoch <= 5:
-                    lr = config.lr * epoch / 5
-                elif epoch > 180:
-                    lr = config.lr * 0.01
-                elif epoch > 160:
-                    lr = config.lr * 0.1
-                else:
-                    lr = config.lr
+                lr = config.lr
 
             for param_group in optimizer.param_groups:
                 param_group['lr'] = lr
