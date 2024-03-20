@@ -18,9 +18,12 @@ from utils import AverageMeter, ProgressMeter, accuracy
 import warnings
 from backbone.balanced.cifar100 import resnet as resnet32_balancedC100
 from backbone.balanced.imagenet200 import resnet as resnet32_balancedIN200
+import backbone.LT.resnet as resnet_LT
 from backbone.classifiers import fixed
 from backbone.classifiers import learnable
 from utils import dataset, calibration,save_checkpoint
+from utils import LT_utils
+import math
 
 def parse_args():
     parser = argparse.ArgumentParser(description='training')
@@ -67,75 +70,71 @@ def train(train_loader, model, classifier, criterion, optimizer, epoch, config, 
         data_time.update(time.time() - end)
         labels = target.clone()
 
-        # if torch.cuda.is_available():
-        #     images = images.cuda(config.gpu, non_blocking=True)
-        #     target = target.cuda(config.gpu, non_blocking=True)
-
-        # if config.ETF_classifier:
-        #     if config.reg_dot_loss and config.GivenEw:
-        #         learned_norm = produce_Ew(target, config.num_classes)
-        #         if config.dataset == 'imagenet':
-        #             cur_M = learned_norm * classifier.module.polars
-        #         else:
-        #             cur_M = learned_norm * classifier.polars
-        #     else:
-        #         if config.dataset == 'imagenet':
-        #             cur_M = classifier.module.polars
-        #         else:
-        #             cur_M = classifier.polars
-        #
-        # if config.mixup is True:
-        #     images, targets_a, targets_b, lam = mixup_data(images, target, alpha=config.alpha)
-        #
-        #     feat = model(images)
-        #     if config.ETF_classifier:
-        #         feat = classifier(feat)
-        #         output = torch.matmul(feat, cur_M) #+ classifier.module.bias
-        #         if config.reg_dot_loss:  ## ETF classifier + DR loss
-        #             with torch.no_grad():
-        #                 feat_nograd = feat.detach()
-        #                 H_length = torch.clamp(torch.sqrt(torch.sum(feat_nograd ** 2, dim=1, keepdims=False)), 1e-8)
-        #             loss_a = dot_loss(feat, targets_a, cur_M, classifier, criterion, H_length, reg_lam=config.reg_lam)
-        #             loss_b = dot_loss(feat, targets_b, cur_M, classifier, criterion, H_length, reg_lam=config.reg_lam)
-        #             loss = lam * loss_a + (1-lam) * loss_b
-        #         else:   ## ETF classifier + CE loss
-        #             loss = mixup_criterion(criterion, output, targets_a, targets_b, lam)
-        #
-        #     else:       ## learnable classifier + CE loss
-        #         output = classifier(feat)
-        #         loss = mixup_criterion(criterion, output, targets_a, targets_b, lam)
-        #
-        # else:
-        #     feat = model(images)
-        #     if config.ETF_classifier:
-        #         feat = classifier(feat)
-        #         output = torch.matmul(feat, cur_M)
-        #         if config.reg_dot_loss:   ## ETF classifier + DR loss
-        #             with torch.no_grad():
-        #                 feat_nograd = feat.detach()
-        #                 H_length = torch.clamp(torch.sqrt(torch.sum(feat_nograd ** 2, dim=1, keepdims=False)), 1e-8)
-        #             loss = dot_loss(feat, target, cur_M, classifier, criterion, H_length, reg_lam=config.reg_lam)
-        #         else:
-        #             loss = criterion(output, target)
-        #     else:
-        #         output = classifier(feat)
-        #         loss = criterion(output, target)
-
-        nlabels = target.clone()
-        target = classifier.polars[:,target].T
         if torch.cuda.is_available():
             images = images.cuda(config.gpu, non_blocking=True)
             target = target.cuda(config.gpu, non_blocking=True)
 
-        output = model(images)
-        if config.fixed_classifier:
-            classifier.forward_momentum(output.detach(), nlabels.detach())
-            loss = (1.0 - criterion(output, target)).pow(2).sum()
-            output = classifier.predict(output)
+        '''begin long tail'''
+        if config.dataset.endswith('LT'):
+            if config.fixed_classifier:
+                if config.reg_dot_loss and config.GivenEw:
+                    learned_norm = LT_utils.produce_Ew(target, config.num_classes)
+                    if config.dataset == 'imagenetLT':
+                        cur_M = learned_norm * classifier.module.polars
+                    else:
+                        cur_M = learned_norm * classifier.polars
+                else:
+                    if config.dataset == 'imagenetLT':
+                        cur_M = classifier.module.polars
+                    else:
+                        cur_M = classifier.polars
+            if config.mixup is True:
+                images, targets_a, targets_b, lam = LT_utils.mixup_data(images, target, alpha=config.alpha)
+                feat = model(images)
+                if config.fixed_classifier:
+                    feat = classifier(feat)
+                    classifier.forward_momentum(feat.detach(), labels.detach())
+                    output = classifier.predict(feat)
+                    if config.reg_dot_loss:
+                        with torch.no_grad():
+                            feat_nograd = feat.detach()
+                            H_length = torch.clamp(torch.sqrt(torch.sum(feat_nograd ** 2, dim=1, keepdims=False)), 1e-8)
+                        loss_a = LT_utils.dot_loss(feat, targets_a, cur_M, classifier, criterion, H_length, reg_lam=config.reg_lam)
+                        loss_b = LT_utils.dot_loss(feat, targets_b, cur_M, classifier, criterion, H_length, reg_lam=config.reg_lam)
+                        loss = lam * loss_a + (1-lam) * loss_b
+                    else:
+                        loss = LT_utils.mixup_criterion(criterion, output, targets_a, targets_b, lam)
 
+                else:
+                    output = classifier(feat)
+                    loss = LT_utils.mixup_criterion(criterion, output, targets_a, targets_b, lam)
+
+            else:
+                feat = model(images)
+                feat = classifier(feat)
+                classifier.forward_momentum(feat.detach(), labels.detach())
+                if config.ETF_classifier:
+                    output = classifier.predict(feat)
+                    if config.reg_dot_loss:
+                        with torch.no_grad():
+                            feat_nograd = feat.detach()
+                            H_length = torch.clamp(torch.sqrt(torch.sum(feat_nograd ** 2, dim=1, keepdims=False)), 1e-8)
+                        loss = LT_utils.dot_loss(feat, target, cur_M, classifier, criterion, H_length, reg_lam=config.reg_lam)
+                    else:
+                        loss = criterion(output, target)
+                else:
+                    output = classifier(feat)
+                    loss = criterion(output, target)
+            '''end long tail'''
         else:
-            output = classifier(output)
-            loss = criterion(output, target)
+            output = model(images)
+            if config.fixed_classifier:
+                classifier.forward_momentum(output.detach(), labels.detach())
+                loss = (1.0 - criterion(output, target)).pow(2).sum()
+                output = classifier.predict(output)
+            else:
+                output = classifier(output)
+                loss = criterion(output, target)
 
         acc1, acc5 = accuracy(output, labels.cuda(config.gpu, non_blocking=True), topk=(1, 5))
         losses.update(loss.item(), images.size(0))
@@ -174,9 +173,6 @@ def validate(val_loader, model, classifier, criterion, config, logger, dset='tes
     pred_class = np.array([])
     true_class = np.array([])
 
-    feat_dict = {}
-    cnt_dict = {}
-
     with torch.no_grad():
         end = time.time()
         for i, (images, target) in enumerate(val_loader):
@@ -185,48 +181,22 @@ def validate(val_loader, model, classifier, criterion, config, logger, dset='tes
             if torch.cuda.is_available():
                 target = target.cuda(config.gpu, non_blocking=True)
 
-            # if config.ETF_classifier: # and config.reg_dot_loss and config.GivenEw:
-            #     if config.dataset == 'imagenet':
-            #         cur_M = classifier.module.polars
-            #     else:
-            #         cur_M = classifier.polars
+            if config.dataset.ends_with('LT'):
+                if config.fixed_classifier:
+                    feat = model(images)
+                    feat = classifier(feat)
+                    output = classifier.predict(feat)
+                else:
+                    feat = model(images)
+                    output = classifier(feat)
 
-            # compute output
-
-            feat = model(images)
-            labels = target.clone()
-            target = classifier.polars[:,target].T
-            if config.fixed_classifier:
-                loss = (1.0 - criterion(feat, target)).pow(2).sum()
-                output = classifier.predict(feat)
-            # if config.ETF_classifier:
-            #     feat = classifier(feat)
-            #     output = torch.matmul(feat, cur_M)
-            #     if config.reg_dot_loss:
-            #         with torch.no_grad():
-            #             feat_nograd = feat.detach()
-            #             H_length = torch.clamp(torch.sqrt(torch.sum(feat_nograd ** 2, dim=1, keepdims=False)), 1e-8)
-            #         loss = dot_loss(feat, target, cur_M, classifier, criterion, H_length)
-            #     else:
-            #         loss = criterion(output, target)
-            # else:
-            #     output = classifier(feat)
-            #     loss = criterion(output, target)
-            #
-            # if config.stat_mode:
-            #     uni_lbl, count = torch.unique(target, return_counts=True)
-            #     lbl_num = uni_lbl.size(0)
-            #     for kk in range(lbl_num):
-            #         sum_feat = torch.sum(feat[torch.where(target==uni_lbl[kk])[0], :], dim=0)
-            #         key = uni_lbl[kk].item()
-            #         if uni_lbl[kk] in feat_dict.keys():
-            #             feat_dict[key] = feat_dict[key]+sum_feat
-            #             cnt_dict[key] =  cnt_dict[key]+count[kk]
-            #         else:
-            #             feat_dict[key] = sum_feat
-            #             cnt_dict[key] =  count[kk]
-
-
+            else:
+                feat = model(images)
+                labels = target.clone()
+                target = classifier.polars[:,target].T
+                if config.fixed_classifier:
+                    loss = (1.0 - criterion(feat, target)).pow(2).sum()
+                    output = classifier.predict(feat)
 
             # measure accuracy and record loss
             acc1, acc5 = accuracy(output, labels, topk=(1, 5))
@@ -253,84 +223,16 @@ def validate(val_loader, model, classifier, criterion, config, logger, dset='tes
             if i % config.print_freq == 0:
                 progress.display(i, logger)
         acc_classes = correct / class_num
-        # head_acc = acc_classes[config.head_class_idx[0]:config.head_class_idx[1]].mean() * 100
-
-        # med_acc = acc_classes[config.med_class_idx[0]:config.med_class_idx[1]].mean() * 100
-        # tail_acc = acc_classes[config.tail_class_idx[0]:config.tail_class_idx[1]].mean() * 100
-        # logger.info('* Acc@1 {top1.avg:.3f}% Acc@5 {top5.avg:.3f}% HAcc {head_acc:.3f}% MAcc {med_acc:.3f}% TAcc {tail_acc:.3f}%.'.format(top1=top1, top5=top5, head_acc=head_acc, med_acc=med_acc, tail_acc=tail_acc))
-        logger.info(
+        if config.dataset.ends_with('LT'):
+            head_acc = acc_classes[config.head_class_idx[0]:config.head_class_idx[1]].mean() * 100
+            med_acc = acc_classes[config.med_class_idx[0]:config.med_class_idx[1]].mean() * 100
+            tail_acc = acc_classes[config.tail_class_idx[0]:config.tail_class_idx[1]].mean() * 100
+            logger.info('* Acc@1 {top1.avg:.3f}% Acc@5 {top5.avg:.3f}% HAcc {head_acc:.3f}% MAcc {med_acc:.3f}% TAcc {tail_acc:.3f}%.'.format(top1=top1, top5=top5, head_acc=head_acc, med_acc=med_acc, tail_acc=tail_acc))
+        else:
+            logger.info(
             '* Acc@1 {top1.avg:.3f}% Acc@5 {top5.avg:.3f}% '.format(top1=top1, top5=top5))
         cal = calibration(true_class, pred_class, confidence, num_bins=15)
 
-
-        # if config.stat_mode:
-        #     ### calculate statistics
-        #     #print(feat_dict)
-        #     total_sum_feat = sum(feat_dict.values())
-        #     total_counts = sum(cnt_dict.values())
-        #     global_mean = total_sum_feat / total_counts
-        #     class_mean = torch.zeros(config.num_classes, feat.size(1)).cuda()
-        #     for i in range(config.num_classes):
-        #         if i in feat_dict.keys():
-        #             class_mean[i,:] = feat_dict[i] / cnt_dict[i]
-        #     class_mean = class_mean - global_mean  ## K, dim
-        #     W_mean = classifier.polars.T if config.ETF_classifier else classifier.fc.weight ## K,dim
-        #     ## F dist
-        #     class_mean_F = class_mean / torch.sqrt(torch.sum(class_mean ** 2))
-        #     W_mean_F = W_mean / torch.sqrt(torch.sum(W_mean ** 2))
-        #     F_dist =torch.sum((class_mean_F - W_mean_F)**2)
-        #     ##
-        #     class_mean = class_mean / torch.sqrt(torch.sum(class_mean**2, dim=1, keepdims=True))
-        #     W_mean = W_mean / torch.sqrt(torch.sum(W_mean **2, dim=1,keepdims=True))
-        #     cos_HH = torch.matmul(class_mean, class_mean.T)
-        #     cos_WW = torch.matmul(W_mean, W_mean.T)
-        #     cos_HW = torch.matmul(class_mean, W_mean.T)
-        #
-        #     diag_HW = torch.diag(cos_HW, 0)
-        #     diag_avg = torch.mean(diag_HW)
-        #     diag_std = torch.std(diag_HW)
-        #     ##
-        #     up_HH = torch.cat([torch.diag(cos_HH, i) for i in range(1, config.num_classes)])
-        #     up_WW = torch.cat([torch.diag(cos_WW, i) for i in range(1, config.num_classes)])
-        #     up_HW = torch.cat([torch.diag(cos_HW, i) for i in range(1, config.num_classes)])
-        #     up_HH_avg = torch.mean(up_HH)
-        #     up_HH_std = torch.std(up_HH)
-        #     up_WW_avg = torch.mean(up_WW)
-        #     up_WW_std = torch.std(up_WW)
-        #     up_HW_avg = torch.mean(up_HW)
-        #     up_HW_std = torch.std(up_HW)
-        #     ##
-        #     print('cos-avg-HH', up_HH_avg)
-        #     print('cos-avg-WW', up_WW_avg)
-        #     print('cos-avg-HW', up_HW_avg)
-        #     print('cos-std-HH', up_HH_std)
-        #     print('cos-std-WW', up_WW_std)
-        #     print('cos-std-HW', up_HW_std)
-        #     ##
-        #     print('diag-avg-HW', diag_avg)
-        #     print('diag-std-HW', diag_std)
-        #     ##
-        #     print('||H-M||_F^2', F_dist)
-        #     if dset=='train':
-        #         cos_avg_HH_train.append(up_HH_avg.item())
-        #         cos_avg_WW_train.append(up_WW_avg.item())
-        #         cos_avg_HW_train.append(up_HW_avg.item())
-        #         cos_std_HH_train.append(up_HH_std.item())
-        #         cos_std_WW_train.append(up_WW_std.item())
-        #         cos_std_HW_train.append(up_HW_std.item())
-        #         HM_F2_train.append(F_dist.item())
-        #         diag_avg_HW_train.append(diag_avg.item())
-        #         diag_std_HW_train.append(diag_std.item())
-        #     else:
-        #         cos_avg_HH_val.append(up_HH_avg.item())
-        #         cos_avg_WW_val.append(up_WW_avg.item())
-        #         cos_avg_HW_val.append(up_HW_avg.item())
-        #         cos_std_HH_val.append(up_HH_std.item())
-        #         cos_std_WW_val.append(up_WW_std.item())
-        #         cos_std_HW_val.append(up_HW_std.item())
-        #         HM_F2_val.append(F_dist.item())
-        #         diag_avg_HW_val.append(diag_avg.item())
-        #         diag_std_HW_val.append(diag_std.item())
 
     return top1.avg, cal['expected_calibration_error'] * 100
 
@@ -395,8 +297,15 @@ def main_worker(gpu, ngpus_per_node, config, logger, model_dir):
         else:
             model = getattr(resnet32_balancedIN200, config.backbone)(depth=32, output_dims=config.space_dim, multiplier=1)
         if config.fixed_classifier:
-            print('########   Using a fixed hyperspherical classifier    ##########')
+            print('########   Using a fixed hyperspherical classifier with DL2PA  ##########')
             classifier = getattr(fixed, 'fixed_Classifier')(feat_in=config.space_dim, num_classes=config.num_classes, centroid_path=config.centroid_path)
+        else:
+            classifier = getattr(learnable, 'Classifier')(feat_in=config.space_dim, num_classes=config.num_classes)
+    elif config.dataset == 'cifar10LT' or config.dataset == 'cifar100LT' or config.dataset == 'stl10LT' or config.dataset == 'svhnLT' or config.dataset == 'imagenetLT':
+        model = getattr(resnet_LT, config.backbone)()
+        if config.fixed_classifier:
+            print('########    Using a fixed hyperspherical classifier with DL2PA   ##########')
+            classifier =getattr(fixed, 'fixed_Classifier')(feat_in=config.space_dim, num_classes=config.num_classes, centroid_path=config.centroid_path)
         else:
             classifier = getattr(learnable, 'Classifier')(feat_in=config.space_dim, num_classes=config.num_classes)
 
@@ -430,36 +339,76 @@ def main_worker(gpu, ngpus_per_node, config, logger, model_dir):
         model = model.cuda(config.gpu)
         classifier = classifier.cuda(config.gpu)
 
-    # Data loading code
-    if config.dataset == 'cifar100':
-        trainloader, testloader = dataset.load_cifar100(config.data_path, config.batch_size, {'num_workers': config.workers, 'pin_memory': True})
-    elif config.dataset == 'imagenet200':
-        trainloader, testloader = dataset.load_imagenet200(config.data_path, config.batch_size, {'num_workers': config.workers, 'pin_memory': True})
-
-
-    # define loss function (criterion) and optimizer
+        # define loss function (criterion) and optimizer
     if config.fixed_classifier:
         criterion = nn.CosineSimilarity(eps=1e-9).cuda(config.gpu)
     else:
         criterion = nn.CrossEntropyLoss().cuda(config.gpu)
 
+    # Data loading code
+    if config.dataset == 'cifar100':
+        trainloader, testloader = dataset.load_cifar100(config.data_path, config.batch_size, {'num_workers': config.workers, 'pin_memory': True})
+    elif config.dataset == 'imagenet200':
+        trainloader, testloader = dataset.load_imagenet200(config.data_path, config.batch_size, {'num_workers': config.workers, 'pin_memory': True})
+    elif config.dataset == 'cifar10LT':
+        trainloader, testloader = dataset.CIFAR10_LT(config.distributed, root=config.data_path, imb_factor=config.imb_factor,
+                             batch_size=config.batch_size, num_works=config.workers)
+    elif config.dataset == 'cifar100LT':
+        trainloader, testloader = dataset.CIFAR100_LT(config.distributed, root=config.data_path, imb_factor=config.imb_factor,
+                              batch_size=config.batch_size, num_works=config.workers)
+    elif config.dataset == 'stl10LT':
+        trainloader, testloader = dataset.STL10_LT(config.distributed, root=config.data_path, imb_factor=config.imb_factor,
+                           batch_size=config.batch_size, num_works=config.workers)
+    elif config.dataset == 'svhnLT':
+        trainloader, testloader = dataset.SVHN_LT(config.distributed, root=config.data_path, imb_factor=config.imb_factor,
+                          batch_size=config.batch_size, num_works=config.workers)
+    elif config.dataset == 'imagenetLT':
+        trainloader, testloader = dataset.ImageNet_LT(config.distributed, root=config.data_path,
+                              batch_size=config.batch_size, num_works=config.workers)
 
-    optimizer = torch.optim.SGD([{"params": model.parameters()},
-                                {"params": classifier.parameters()}], config.lr,
-                                momentum=config.momentum,
-                                weight_decay=config.weight_decay)
-    learning_rate = config.lr
+    if config.dataset == 'cifar100' or config.dataset == 'imagenet200':
+        optimizer = torch.optim.SGD([{"params": model.parameters()},
+                                    {"params": classifier.parameters()}], config.lr,
+                                    momentum=config.momentum,
+                                    weight_decay=config.weight_decay)
+
+    if config.reg_dot_loss:
+        criterion = config.criterion
+        print('----  Dot-Regression Loss is adopted ----')
+
+    lr = config.lr
     best_acc1 = -1.0
     for epoch in range(config.num_epochs):
         # if config.distributed:
         #     train_sampler.set_epoch(epoch)
 
-        # adjust_learning_rate(optimizer, epoch, config)
+        # adjust learning rate
         if config.dataset == 'cifar100' or config.dataset == 'imagenet200':
             if epoch in [config.drop1, config.drop2]:
-                learning_rate *= 0.1
+                lr *= 0.1
                 for param_group in optimizer.param_groups:
-                    param_group['lr'] = learning_rate
+                    param_group['lr'] = lr
+        elif config.dataset == 'cifar10LT' or config.dataset == 'cifar100LT' or config.dataset == 'stl10LT' or config.dataset == 'svhnLT' or config.dataset == 'imagenetLT':
+            """Sets the learning rate"""
+            if config.cos:
+                lr_min = 0
+                lr_max = config.lr
+                lr = lr_min + 0.5 * (lr_max - lr_min) * (1 + math.cos(epoch / config.num_epochs * 3.1415926535))
+
+            else:
+                epoch = epoch + 1
+                if epoch <= 5:
+                    lr = config.lr * epoch / 5
+                elif epoch > 180:
+                    lr = config.lr * 0.01
+                elif epoch > 160:
+                    lr = config.lr * 0.1
+                else:
+                    lr = config.lr
+
+            for param_group in optimizer.param_groups:
+                param_group['lr'] = lr
+
 
         # train for one epoch
         train(trainloader, model, classifier, criterion, optimizer, epoch, config, logger)

@@ -1,19 +1,28 @@
-name: Res32_cifar100
+name: Res32_cifar100_imb002_fixed_classifier
 print_freq: 40
-workers: 32
+workers: 4
 log_dir: 'logs'
 model_dir: 'ckps'
 
 # dataset & model setting
-dataset: 'cifar100'
-data_path:  './data/data_cifar/' #'./data/cifar/cifar-10-batches-py/'
+dataset: 'cifar100LT'
+data_path: './data/data_cifar/'
 num_classes: 100
-backbone: 'ResNet'
+imb_factor: 0.02
+backbone: 'resnet32_fe_c100'
+resume: ''
+head_class_idx:
+  - 0
+  - 36
+med_class_idx:
+  - 36
+  - 71
+tail_class_idx:
+  - 71
+  - 100
 fixed_classifier: True
-space_dim: 25
+space_dim: 128
 centroid_path: 'Estimated_prototypes/100centers_25dim.pth'
-
-
 
 # distributed training
 deterministic: False
@@ -28,10 +37,14 @@ multiprocessing_distributed: False
 
 
 # Train
-lr: 0.01
+mode: 'stage1'
+lr: 0.1
 batch_size: 128
-weight_decay: 0.0001
-num_epochs: 250
+weight_decay: 2e-4
+num_epochs: 200
 momentum: 0.9
-drop1: 100
-drop2: 200
+cos: False
+mixup: True
+alpha: 1.0
+
+reg_dot_loss: True
