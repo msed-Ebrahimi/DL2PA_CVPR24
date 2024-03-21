@@ -270,9 +270,9 @@ def main_worker(gpu, ngpus_per_node, config, logger, model_dir):
 
     if config.fixed_classifier:
         print('########   Using a fixed hyperspherical classifier with DL2PA  ##########')
-        classifier = getattr(fixed, 'fixed_Classifier')(feat_in=config.space_dim, num_classes=config.num_classes, centroid_path=config.centroid_path)
+        classifier = getattr(fixed, 'fixed_Classifier')(feat_in=config.space_dim, num_classes=config.num_classes, centroid_path=config.centroid_path, gpu_id=config.gpu)
     else:
-        classifier = getattr(learnable, 'Classifier')(feat_in=config.space_dim, num_classes=config.num_classes)
+        classifier = getattr(learnable, 'Classifier')(feat_in=config.space_dim, num_classes=config.num_classes, gpu_id=config.gpu)
 
     if not torch.cuda.is_available():
         logger.info('using CPU, this will be slow')

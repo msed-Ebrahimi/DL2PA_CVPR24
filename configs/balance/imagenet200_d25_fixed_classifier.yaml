@@ -16,7 +16,7 @@ centroid_path: 'Estimated_prototypes/200centers_25dim.pth'
 # distributed training
 deterministic: False
 distributed: False
-gpu: 0
+gpu: 1
 world_size: -1
 rank: -1
 dist_url: 'tcp://224.66.41.62:23456'
