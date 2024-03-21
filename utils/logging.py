@@ -21,7 +21,7 @@ _C.imb_factor = 0.01
 _C.backbone = 'ResNet'
 _C.fixed_classifier = False
 _C.space_dim = 25
-_C.centroid_path = 'path/to/centeroids'
+_C.centroid_path = f'path/to/centeroids'
 _C.head_class_idx = [0, 1]
 _C.med_class_idx = [0, 1]
 _C.tail_class_idx = [0, 1]
@@ -57,6 +57,7 @@ def update_config(cfg, args):
 
     cfg.merge_from_file(args.cfg)
     cfg.merge_from_list(args.opts)
+    cfg.centroid_path = f'Estimated_prototypes/{cfg.num_classes}centers_{cfg.space_dim}dim.pth'
 
 
 def create_logger(cfg, cfg_name):
