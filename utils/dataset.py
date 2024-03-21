@@ -499,7 +499,7 @@ def ImageNet_LT(distributed, root="", batch_size=60, num_works=40):
 
     return train_instance, eval
 
-def STL10_LT(self, distributed, root='./data/cifar10', imb_type='exp',
+def STL10_LT( distributed, root='./data/cifar10', imb_type='exp',
                  imb_factor=0.01, batch_size=128, num_works=40):
     transform = transforms.Compose([
             transforms.ToTensor(),

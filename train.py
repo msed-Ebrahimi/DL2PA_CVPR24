@@ -323,7 +323,7 @@ def main_worker(gpu, ngpus_per_node, config, logger, model_dir):
                               batch_size=config.batch_size, num_works=config.workers)
     elif config.dataset == 'stl10LT':
         trainloader, testloader = dataset.STL10_LT(config.distributed, root=config.data_path, imb_factor=config.imb_factor,
-                           batch_size=config.batch_size, num_works=config.workers)
+                                                   batch_size=config.batch_size, num_works=config.workers)
     elif config.dataset == 'svhnLT':
         trainloader, testloader = dataset.SVHN_LT(config.distributed, root=config.data_path, imb_factor=config.imb_factor,
                           batch_size=config.batch_size, num_works=config.workers)
