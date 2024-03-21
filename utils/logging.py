@@ -57,7 +57,7 @@ def update_config(cfg, args):
 
     cfg.merge_from_file(args.cfg)
     cfg.merge_from_list(args.opts)
-    cfg.centroid_path = f'Estimated_prototypes/{cfg.num_classes}centers_{cfg.space_dim}dim.pth'
+    cfg.centroid_path = f'Estimated_prototypes/{cfg.num_classes}centers_{cfg.space_dim}dim.pth' #path to load precomputed centroids
 
 
 def create_logger(cfg, cfg_name):

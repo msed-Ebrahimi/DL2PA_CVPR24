@@ -6,7 +6,7 @@ model_dir: 'ckps'
 
 # dataset & model setting
 dataset: 'cifar100'
-data_path:  './data/data_cifar/' #'./data/cifar/cifar-10-batches-py/'
+data_path:  './data/data_cifar/'
 num_classes: 100
 backbone: 'ResNet'
 fixed_classifier: True
