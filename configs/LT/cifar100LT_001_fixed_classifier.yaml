@@ -8,7 +8,7 @@ model_dir: 'ckps'
 dataset: 'cifar100LT'
 data_path: './data/data_cifar/'
 num_classes: 100
-imb_factor: 0.005
+imb_factor: 0.01
 backbone: 'resnet32_fe_c100'
 head_class_idx:
   - 0
@@ -41,7 +41,8 @@ batch_size: 128
 weight_decay: 2e-4
 num_epochs: 200
 momentum: 0.9
-mixup: True
 alpha: 1.0
+drop1: 5
+drop2: 160
+drop3: 180
 
-reg_dot_loss: True

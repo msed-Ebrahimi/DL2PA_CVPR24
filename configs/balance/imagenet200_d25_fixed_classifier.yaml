@@ -1,19 +1,17 @@
-name: Res32_cifar100
+name: Res32_d25_imagenet200
 print_freq: 40
 workers: 32
 log_dir: 'logs'
 model_dir: 'ckps'
 
 # dataset & model setting
-dataset: 'cifar100'
-data_path:  './data/data_cifar/' #'./data/cifar/cifar-10-batches-py/'
-num_classes: 100
+dataset: 'imagenet200'
+data_path:  '/home/exx/PycharmProjects/hpn/data/' #'./data/cifar/cifar-10-batches-py/'
+num_classes: 200
 backbone: 'ResNet'
 fixed_classifier: True
 space_dim: 25
-centroid_path: 'Estimated_prototypes/100centers_25dim.pth'
-
-
+centroid_path: 'Estimated_prototypes/200centers_25dim.pth'
 
 # distributed training
 deterministic: False
@@ -24,8 +22,6 @@ rank: -1
 dist_url: 'tcp://224.66.41.62:23456'
 dist_backend: 'nccl'
 multiprocessing_distributed: False
-
-
 
 # Train
 lr: 0.01

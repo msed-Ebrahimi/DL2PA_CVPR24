@@ -19,6 +19,7 @@ import warnings
 from backbone.balanced.cifar100 import resnet as resnet32_balancedC100
 from backbone.balanced.imagenet200 import resnet as resnet32_balancedIN200
 import backbone.LT.resnet as resnet_LT
+import backbone.LT.resnetIN as resnet_IN
 from backbone.classifiers import fixed
 from backbone.classifiers import learnable
 from utils import dataset, calibration,save_checkpoint
@@ -258,23 +259,20 @@ def main_worker(gpu, ngpus_per_node, config, logger, model_dir):
         dist.init_process_group(backend=config.dist_backend, init_method=config.dist_url,
                                 world_size=config.world_size, rank=config.rank)
 
-    if config.dataset == 'cifar100' or config.dataset == 'imagenet200':
-        if config.dataset == 'cifar100':
+    if config.dataset == 'cifar100':
             model = getattr(resnet32_balancedC100, config.backbone)(depth=32, output_dims= config.space_dim, multiplier= 1)
-        else:
+    elif config.dataset == 'imagenet200':
             model = getattr(resnet32_balancedIN200, config.backbone)(depth=32, output_dims=config.space_dim, multiplier=1)
-        if config.fixed_classifier:
-            print('########   Using a fixed hyperspherical classifier with DL2PA  ##########')
-            classifier = getattr(fixed, 'fixed_Classifier')(feat_in=config.space_dim, num_classes=config.num_classes, centroid_path=config.centroid_path)
-        else:
-            classifier = getattr(learnable, 'Classifier')(feat_in=config.space_dim, num_classes=config.num_classes)
-    elif config.dataset == 'cifar10LT' or config.dataset == 'cifar100LT' or config.dataset == 'stl10LT' or config.dataset == 'svhnLT' or config.dataset == 'imagenetLT':
+    elif config.dataset == 'cifar10LT' or config.dataset == 'cifar100LT' or config.dataset == 'stl10LT' or config.dataset == 'svhnLT':
         model = getattr(resnet_LT, config.backbone)()
-        if config.fixed_classifier:
-            print('########    Using a fixed hyperspherical classifier with DL2PA   ##########')
-            classifier =getattr(fixed, 'fixed_Classifier')(feat_in=config.space_dim, num_classes=config.num_classes, centroid_path=config.centroid_path)
-        else:
-            classifier = getattr(learnable, 'Classifier')(feat_in=config.space_dim, num_classes=config.num_classes)
+    elif config.dataset == 'imagenetLT':
+        model = getattr(resnet_IN, config.backbone)()
+
+    if config.fixed_classifier:
+        print('########   Using a fixed hyperspherical classifier with DL2PA  ##########')
+        classifier = getattr(fixed, 'fixed_Classifier')(feat_in=config.space_dim, num_classes=config.num_classes, centroid_path=config.centroid_path)
+    else:
+        classifier = getattr(learnable, 'Classifier')(feat_in=config.space_dim, num_classes=config.num_classes)
 
     if not torch.cuda.is_available():
         logger.info('using CPU, this will be slow')
@@ -333,8 +331,10 @@ def main_worker(gpu, ngpus_per_node, config, logger, model_dir):
         trainloader, testloader = dataset.ImageNet_LT(config.distributed, root=config.data_path,
                               batch_size=config.batch_size, num_works=config.workers)
 
-    if not config.dataset.startswith('imagenet'):
-        optimizer = torch.optim.SGD([{"params": model.parameters()},
+    if config.distributed:
+        train_sampler = dataset.dist_sampler
+
+    optimizer = torch.optim.SGD([{"params": model.parameters()},
                                     {"params": classifier.parameters()}], config.lr,
                                     momentum=config.momentum,
                                     weight_decay=config.weight_decay)
@@ -342,8 +342,8 @@ def main_worker(gpu, ngpus_per_node, config, logger, model_dir):
     lr = config.lr
     best_acc1 = -1.0
     for epoch in range(config.num_epochs):
-        # if config.distributed:
-        #     train_sampler.set_epoch(epoch)
+        if config.distributed:
+            train_sampler.set_epoch(epoch)
 
         # adjust learning rate
         if config.dataset == 'cifar100' or config.dataset == 'imagenet200':
@@ -354,18 +354,17 @@ def main_worker(gpu, ngpus_per_node, config, logger, model_dir):
         elif config.dataset == 'cifar10LT' or config.dataset == 'cifar100LT' or config.dataset == 'stl10LT' or config.dataset == 'svhnLT' or config.dataset == 'imagenetLT':
             """Sets the learning rate"""
             epoch = epoch + 1
-            if epoch <= 5:
+            if epoch <= config.drop1:
                 lr = config.lr * epoch / 5
-            elif epoch > 180:
+            elif epoch > config.drop3:
                 lr = config.lr * 0.01
-            elif epoch > 160:
+            elif epoch > config.drop2:
                 lr = config.lr * 0.1
             else:
                 lr = config.lr
 
             for param_group in optimizer.param_groups:
                 param_group['lr'] = lr
-
 
         # train for one epoch
         train(trainloader, model, classifier, criterion, optimizer, epoch, config, logger)

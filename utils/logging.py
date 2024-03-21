@@ -22,7 +22,6 @@ _C.backbone = 'ResNet'
 _C.fixed_classifier = False
 _C.space_dim = 25
 _C.centroid_path = 'path/to/centeroids'
-# _C.resume = ''
 _C.head_class_idx = [0, 1]
 _C.med_class_idx = [0, 1]
 _C.tail_class_idx = [0, 1]
@@ -36,32 +35,20 @@ _C.dist_backend = 'nccl'
 _C.multiprocessing_distributed = False
 _C.distributed = False
 
-# _C.mode = None
-# _C.smooth_tail = None
-# _C.smooth_head = None
-# _C.shift_bn = False
-# _C.lr_factor = None
 _C.lr = 0.1
-_C.drop1 = 100
-_C.drop2 = 150
+_C.drop1 = -1
+_C.drop2 = -1
+_C.drop3 = -1
 _C.batch_size = 128
 _C.weight_decay = 0.002
 _C.num_epochs = 200
 _C.momentum = 0.9
-# _C.cos = False
-_C.mixup = True
 _C.alpha = 1.0
 
-# _C.ETF_classifier = False
 _C.fix_bn = False
-# _C.ETF_mix = False
-# _C.LWS = False
-# _C.CLS_BALAN = False
 _C.dot_loss = False
 _C.reg_dot_loss = False
-# _C.GivenEw = True  ## valid when reg_dot_loss True
 _C.criterion = 'reg_dot_loss'
-# _C.stat_mode = False
 _C.reg_lam = 0.0
 
 

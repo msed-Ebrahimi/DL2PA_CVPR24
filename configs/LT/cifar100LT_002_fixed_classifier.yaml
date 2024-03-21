@@ -1,0 +1,45 @@
+name: Res32_cifar100_imb002_fixed_classifier
+print_freq: 40
+workers: 4
+log_dir: 'logs'
+model_dir: 'ckps'
+
+# dataset & model setting
+dataset: 'cifar100LT'
+data_path: './data/data_cifar/'
+num_classes: 100
+imb_factor: 0.02
+backbone: 'resnet32_fe_c100'
+head_class_idx:
+  - 0
+  - 36
+med_class_idx:
+  - 36
+  - 71
+tail_class_idx:
+  - 71
+  - 100
+fixed_classifier: True
+space_dim: 128
+centroid_path: 'Estimated_prototypes/100centers_128dim.pth'
+
+# distributed training
+deterministic: False
+distributed: False
+gpu: 0
+world_size: -1
+rank: -1
+dist_url: 'tcp://224.66.41.62:23456'
+dist_backend: 'nccl'
+multiprocessing_distributed: False
+
+# Train
+lr: 0.1
+batch_size: 128
+weight_decay: 2e-4
+num_epochs: 200
+momentum: 0.9
+alpha: 1.0
+drop1: 5
+drop2: 160
+drop3: 180
