@@ -80,3 +80,8 @@ class fixed_Classifier(nn.Module):
         x = F.normalize(x, p=2, dim=1)
         x = torch.mm(x, self.polars)
         return x
+
+    def predictLT(self, x,weighted_polars):
+        x = F.normalize(x, p=2, dim=1)
+        x = torch.mm(x, weighted_polars)
+        return x

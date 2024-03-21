@@ -1,8 +1,5 @@
 import numpy as np
-
 import torch
-import torch.nn as nn
-import torch.nn.functional as F
 
 
 def produce_Ew(label, num_classes):
@@ -42,19 +39,17 @@ def mixup_data(x, y, alpha=1.0, use_cuda=True):
 def mixup_criterion(criterion, pred, y_a, y_b, lam):
     return lam * criterion(pred, y_a) + (1 - lam) * criterion(pred, y_b)
 
-def dot_loss(output, label, cur_M, classifier, criterion, H_length, reg_lam=0):
-    target = cur_M[:, label].T ## B, d  output: B, d
-    if criterion == 'dot_loss':
-        loss = - torch.bmm(output.unsqueeze(1), target.unsqueeze(2)).view(-1).mean()
-    elif criterion == 'reg_dot_loss':
-        dot = torch.bmm(output.unsqueeze(1), target.unsqueeze(2)).view(-1) #+ classifier.module.bias[label].view(-1)
+def LTloss(feat, dot, target, reg_lam=0):
 
-        with torch.no_grad():
-            M_length = torch.sqrt(torch.sum(target ** 2, dim=1, keepdims=False))
-        loss = (1/2) * torch.mean(((dot-(M_length * H_length)) ** 2) / H_length)
+    with torch.no_grad():
+        feat_nograd = feat.detach()
+        H_length = torch.clamp(torch.sqrt(torch.sum(feat_nograd ** 2, dim=1, keepdims=False)), 1e-8)
+        M_length = torch.sqrt(torch.sum(target ** 2, dim=1, keepdims=False))
 
-        if reg_lam > 0:
-            reg_Eh_l2 = torch.mean(torch.sqrt(torch.sum(output ** 2, dim=1, keepdims=True)))
-            loss = loss + reg_Eh_l2*reg_lam
+    loss = (1/2) * torch.mean(((dot-(M_length * H_length)) ** 2) / H_length)
+
+    if reg_lam > 0:
+        reg_Eh_l2 = torch.mean(torch.sqrt(torch.sum(feat ** 2, dim=1, keepdims=True)))
+        loss = loss + reg_Eh_l2*reg_lam
 
     return loss

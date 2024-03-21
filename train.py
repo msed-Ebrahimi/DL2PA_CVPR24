@@ -22,7 +22,7 @@ import backbone.LT.resnet as resnet_LT
 from backbone.classifiers import fixed
 from backbone.classifiers import learnable
 from utils import dataset, calibration,save_checkpoint
-from utils import LT_utils
+from utils import LT_utils, B_utils
 import math
 
 def parse_args():
@@ -61,79 +61,52 @@ def train(train_loader, model, classifier, criterion, optimizer, epoch, config, 
     end = time.time()
 
     for i, (images, target) in enumerate(train_loader):
-
-
         if i > end_steps:
             break
 
         # measure data loading time
         data_time.update(time.time() - end)
-        labels = target.clone()
 
         if torch.cuda.is_available():
             images = images.cuda(config.gpu, non_blocking=True)
             target = target.cuda(config.gpu, non_blocking=True)
+        labels = target.clone()
 
         '''begin long tail'''
         if config.dataset.endswith('LT'):
             if config.fixed_classifier:
-                if config.reg_dot_loss:
-                    learned_norm = LT_utils.produce_Ew(target, config.num_classes)
-                    if config.dataset == 'imagenetLT':
-                        cur_M = learned_norm * classifier.module.polars
-                    else:
-                        cur_M = learned_norm * classifier.polars
+                # weighted by the inverse ratio of the number of samples per class
+                learned_norm = LT_utils.produce_Ew(target, config.num_classes)
+                if config.dataset == 'imagenetLT':
+                    WP = learned_norm * classifier.module.polars
                 else:
-                    if config.dataset == 'imagenetLT':
-                        cur_M = classifier.module.polars
-                    else:
-                        cur_M = classifier.polars
-            if config.mixup is True:
+                    WP = learned_norm * classifier.polars
+
+                # using mixup augmentation
                 images, targets_a, targets_b, lam = LT_utils.mixup_data(images, target, alpha=config.alpha)
-                feat = model(images)
-                if config.fixed_classifier:
-                    feat = classifier(feat)
-                    classifier.forward_momentum(feat.detach(), labels.detach())
-                    output = classifier.predict(feat)
-                    if config.reg_dot_loss:
-                        with torch.no_grad():
-                            feat_nograd = feat.detach()
-                            H_length = torch.clamp(torch.sqrt(torch.sum(feat_nograd ** 2, dim=1, keepdims=False)), 1e-8)
-                        loss_a = LT_utils.dot_loss(feat, targets_a, cur_M, classifier, criterion, H_length, reg_lam=config.reg_lam)
-                        loss_b = LT_utils.dot_loss(feat, targets_b, cur_M, classifier, criterion, H_length, reg_lam=config.reg_lam)
-                        loss = lam * loss_a + (1-lam) * loss_b
-                    else:
-                        loss = LT_utils.mixup_criterion(criterion, output, targets_a, targets_b, lam)
-
-                else:
-                    output = classifier(feat)
-                    loss = LT_utils.mixup_criterion(criterion, output, targets_a, targets_b, lam)
-
-            else:
                 feat = model(images)
                 feat = classifier(feat)
                 classifier.forward_momentum(feat.detach(), labels.detach())
-                if config.ETF_classifier:
-                    output = classifier.predict(feat)
-                    if config.reg_dot_loss:
-                        with torch.no_grad():
-                            feat_nograd = feat.detach()
-                            H_length = torch.clamp(torch.sqrt(torch.sum(feat_nograd ** 2, dim=1, keepdims=False)), 1e-8)
-                        loss = LT_utils.dot_loss(feat, target, cur_M, classifier, criterion, H_length, reg_lam=config.reg_lam)
-                    else:
-                        loss = criterion(output, target)
-                else:
-                    output = classifier(feat)
-                    loss = criterion(output, target)
+                output = classifier.predictLT(feat, WP)
+
+                loss_a = LT_utils.LTloss(feat=feat, dot=output, target=WP[:, targets_a].T, reg_lam=config.reg_lam)
+                loss_b = LT_utils.LTloss(feat=feat, dot=output, target=WP[:, targets_b].T, reg_lam=config.reg_lam)
+                loss = lam * loss_a + (1 - lam) * loss_b
+
+            else:
+                feat = model(images)
+                output = classifier(feat)
+                loss = LT_utils.mixup_criterion(criterion, output, targets_a, targets_b, lam)
             '''end long tail'''
         else:
-            output = model(images)
+            P = classifier.polars[:, target].T
+            feat = model(images)
             if config.fixed_classifier:
-                classifier.forward_momentum(output.detach(), labels.detach())
-                loss = (1.0 - criterion(output, target)).pow(2).sum()
-                output = classifier.predict(output)
+                classifier.forward_momentum(feat.detach(), labels.detach())
+                loss = B_utils.BLoss(criterion, feat, P)
+                output = classifier.predict(feat)
             else:
-                output = classifier(output)
+                output = classifier(feat)
                 loss = criterion(output, target)
 
         acc1, acc5 = accuracy(output, labels.cuda(config.gpu, non_blocking=True), topk=(1, 5))
@@ -153,7 +126,7 @@ def train(train_loader, model, classifier, criterion, optimizer, epoch, config, 
         if i % config.print_freq == 0:
             progress.display(i, logger)
 
-def validate(val_loader, model, classifier, criterion, config, logger, dset='test'):
+def validate(val_loader, model, classifier, config, logger):
     batch_time = AverageMeter('Time', ':6.3f')
     top1 = AverageMeter('Acc@1', ':6.3f')
     top5 = AverageMeter('Acc@5', ':6.3f')
@@ -192,7 +165,6 @@ def validate(val_loader, model, classifier, criterion, config, logger, dset='tes
 
             else:
                 feat = model(images)
-                target = classifier.polars[:,target].T
                 if config.fixed_classifier:
                     output = classifier.predict(feat)
 
@@ -251,8 +223,7 @@ def main():
         torch.cuda.manual_seed_all(seed)
 
     if config.gpu is not None:
-        warnings.warn('You have chosen a specific GPU. This will completely '
-                      'disable data parallelism.')
+        warnings.warn('You have chosen a specific GPU. This will completely disable data parallelism.')
 
     if config.dist_url == "env://" and config.world_size == -1:
         config.world_size = int(os.environ["WORLD_SIZE"])
@@ -272,7 +243,6 @@ def main():
         main_worker(config.gpu, ngpus_per_node, config, logger, model_dir)
 
 def main_worker(gpu, ngpus_per_node, config, logger, model_dir):
-    '''global best_acc1, its_ece'''
     config.gpu = gpu
 
     if config.gpu is not None:
@@ -369,10 +339,6 @@ def main_worker(gpu, ngpus_per_node, config, logger, model_dir):
                                     momentum=config.momentum,
                                     weight_decay=config.weight_decay)
 
-    if config.reg_dot_loss:
-        criterion = config.criterion
-        print('----  Dot-Regression Loss is adopted ----')
-
     lr = config.lr
     best_acc1 = -1.0
     for epoch in range(config.num_epochs):
@@ -405,7 +371,7 @@ def main_worker(gpu, ngpus_per_node, config, logger, model_dir):
         train(trainloader, model, classifier, criterion, optimizer, epoch, config, logger)
 
         # evaluate on validation set
-        acc1, ece = validate(testloader, model, classifier, criterion, config, logger, 'test')
+        acc1, ece = validate(testloader, model, classifier, config, logger)
 
         # hungarian
         classifier.update_fixed_center()
@@ -417,7 +383,8 @@ def main_worker(gpu, ngpus_per_node, config, logger, model_dir):
             its_ece = ece
         logger.info('Best Prec@1: %.3f%% \n' % (best_acc1))
 
-        save_checkpoint({
+        if config.fixed_classifier:
+            save_checkpoint({
                 'epoch': epoch + 1,
                 'state_dict_model': model.state_dict(),
                 'state_dict_classifier': classifier.state_dict(),
@@ -425,65 +392,14 @@ def main_worker(gpu, ngpus_per_node, config, logger, model_dir):
                 'best_acc1': best_acc1,
                 'its_ece': its_ece,
             }, is_best, model_dir)
-        # if not config.multiprocessing_distributed or (config.multiprocessing_distributed
-        #                                               and config.rank % ngpus_per_node == 0):
-        #     if config.dataset != 'imagenet':
-        #         if config.ETF_classifier:
-        #             save_checkpoint({
-        #                 'epoch': epoch + 1,
-        #                 'state_dict_model': model.state_dict(),
-        #                 'state_dict_classifier': classifier.state_dict(),
-        #                 'cur_M': classifier.ori_M,
-        #                 'best_acc1': best_acc1,
-        #                 'its_ece': its_ece,
-        #             }, is_best, model_dir)
-        #         else:
-        #             save_checkpoint({
-        #                 'epoch': epoch + 1,
-        #                 'state_dict_model': model.state_dict(),
-        #                 'state_dict_classifier': classifier.state_dict(),
-        #                 'best_acc1': best_acc1,
-        #                 'its_ece': its_ece,
-        #             }, is_best, model_dir)
-        #     else:
-        #         if config.ETF_classifier:
-        #             save_checkpoint({
-        #                 'epoch': epoch + 1,
-        #                 'state_dict_model': model.state_dict(),
-        #                 'state_dict_classifier': classifier.state_dict(),
-        #                 'cur_M': classifier.module.ori_M,
-        #                 'best_acc1': best_acc1,
-        #                 'its_ece': its_ece,
-        #             }, is_best, model_dir)
-        #         else:
-        #             save_checkpoint({
-        #                 'epoch': epoch + 1,
-        #                 'state_dict_model': model.state_dict(),
-        #                 'state_dict_classifier': classifier.state_dict(),
-        #                 'best_acc1': best_acc1,
-        #                 'its_ece': its_ece,
-        #             }, is_best, model_dir)
-
-    # if config.stat_mode:
-    #     np.save(model_dir+'/cos_avg_HH_train.npy', np.array(cos_avg_HH_train))
-    #     np.save(model_dir+'/cos_avg_WW_train.npy', np.array(cos_avg_WW_train))
-    #     np.save(model_dir+'/cos_avg_HW_train.npy', np.array(cos_avg_HW_train))
-    #     np.save(model_dir+'/cos_std_HH_train.npy', np.array(cos_std_HH_train))
-    #     np.save(model_dir+'/cos_std_WW_train.npy', np.array(cos_std_WW_train))
-    #     np.save(model_dir+'/cos_std_HW_train.npy', np.array(cos_std_HW_train))
-    #     np.save(model_dir+'/diag_avg_train.npy', np.array(diag_avg_HW_train))
-    #     np.save(model_dir+'/diag_std_train.npy', np.array(diag_std_HW_train))
-    #     np.save(model_dir+'/HM_F2_train.npy', np.array(HM_F2_train))
-    #     ##
-    #     np.save(model_dir+'/cos_avg_HH_val.npy', np.array(cos_avg_HH_val))
-    #     np.save(model_dir+'/cos_avg_WW_val.npy', np.array(cos_avg_WW_val))
-    #     np.save(model_dir+'/cos_avg_HW_val.npy', np.array(cos_avg_HW_val))
-    #     np.save(model_dir+'/cos_std_HH_val.npy', np.array(cos_std_HH_val))
-    #     np.save(model_dir+'/cos_std_WW_val.npy', np.array(cos_std_WW_val))
-    #     np.save(model_dir+'/cos_std_HW_val.npy', np.array(cos_std_HW_val))
-    #     np.save(model_dir+'/diag_avg_val.npy', np.array(diag_avg_HW_val))
-    #     np.save(model_dir+'/diag_std_val.npy', np.array(diag_std_HW_val))
-    #     np.save(model_dir+'/HM_F2_val.npy', np.array(HM_F2_val))
+        else:
+            save_checkpoint({
+                            'epoch': epoch + 1,
+                            'state_dict_model': model.state_dict(),
+                            'state_dict_classifier': classifier.state_dict(),
+                            'best_acc1': best_acc1,
+                            'its_ece': its_ece,
+                        }, is_best, model_dir)
 
 if __name__ == '__main__':
     main()
