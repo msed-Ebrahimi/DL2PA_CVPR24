@@ -1,0 +1,48 @@
+name: Res32_svhn_imb001_fixed_classifier
+print_freq: 40
+workers: 16
+log_dir: 'logs'
+model_dir: 'ckps'
+
+# dataset & model setting
+dataset: 'svhnLT'
+data_path: './data/data_cifar/'
+num_classes: 10
+imb_factor: 0.01
+backbone: 'resnet32_fe'
+fixed_classifier: True
+space_dim: 64
+head_class_idx:
+  - 0
+  - 3
+med_class_idx:
+  - 3
+  - 7
+tail_class_idx:
+  - 7
+  - 10
+
+
+# distributed training
+deterministic: False
+distributed: False
+gpu: 2
+world_size: -1
+rank: -1
+dist_url: 'tcp://224.66.41.62:23456'
+dist_backend: 'nccl'
+multiprocessing_distributed: False
+
+
+
+# Train
+lr: 0.1
+batch_size: 128
+weight_decay: 2e-4
+num_epochs: 200
+momentum: 0.9
+alpha: 1.0
+drop1: 5
+drop2: 160
+drop3: 180
+
