@@ -89,8 +89,8 @@ def train(train_loader, model, classifier, criterion, optimizer, epoch, config, 
                 classifier.forward_momentum(feat.detach(), labels.detach())
                 output = classifier.predictLT(feat, WP)
 
-                loss_a = LT_utils.LTloss(feat=feat, dot=output, target=WP[:, targets_a].T, reg_lam=config.reg_lam)
-                loss_b = LT_utils.LTloss(feat=feat, dot=output, target=WP[:, targets_b].T, reg_lam=config.reg_lam)
+                loss_a = LT_utils.LTloss(feat=feat, target=WP[:, targets_a].T, reg_lam=config.reg_lam)
+                loss_b = LT_utils.LTloss(feat=feat, target=WP[:, targets_b].T, reg_lam=config.reg_lam)
                 loss = lam * loss_a + (1 - lam) * loss_b
 
             else:

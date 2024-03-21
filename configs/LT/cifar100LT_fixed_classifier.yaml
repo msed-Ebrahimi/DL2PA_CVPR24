@@ -8,7 +8,7 @@ model_dir: 'ckps'
 dataset: 'cifar100LT'
 data_path: './data/data_cifar/'
 num_classes: 100
-imb_factor: 0.02
+imb_factor: 0.005
 backbone: 'resnet32_fe_c100'
 head_class_idx:
   - 0

@@ -39,13 +39,13 @@ def mixup_data(x, y, alpha=1.0, use_cuda=True):
 def mixup_criterion(criterion, pred, y_a, y_b, lam):
     return lam * criterion(pred, y_a) + (1 - lam) * criterion(pred, y_b)
 
-def LTloss(feat, dot, target, reg_lam=0):
+def LTloss(feat,  target, reg_lam=0):
 
     with torch.no_grad():
         feat_nograd = feat.detach()
         H_length = torch.clamp(torch.sqrt(torch.sum(feat_nograd ** 2, dim=1, keepdims=False)), 1e-8)
         M_length = torch.sqrt(torch.sum(target ** 2, dim=1, keepdims=False))
-
+    dot =  torch.bmm(feat.unsqueeze(1), target.unsqueeze(2)).view(-1)
     loss = (1/2) * torch.mean(((dot-(M_length * H_length)) ** 2) / H_length)
 
     if reg_lam > 0:
