@@ -25,6 +25,10 @@ _C.centroid_path = f'path/to/centeroids'
 _C.head_class_idx = [0, 1]
 _C.med_class_idx = [0, 1]
 _C.tail_class_idx = [0, 1]
+_C.crop_size = -1
+_C.resize_size = -1
+_C.warmup_epochs = -1
+_C.lr_warmup_decay = -1
 
 _C.deterministic = True
 _C.gpu = 0

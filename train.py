@@ -19,12 +19,13 @@ import warnings
 from backbone.balanced.cifar100 import resnet as resnet32_balancedC100
 from backbone.balanced.imagenet200 import resnet as resnet32_balancedIN200
 import backbone.LT.resnet as resnet_LT
+from backbone.balanced.imagenet import resnet as resnet_balancedIN
 import backbone.LT.resnetIN as resnet_IN
 from backbone.classifiers import fixed
 from backbone.classifiers import learnable
 from utils import dataset, calibration,save_checkpoint
 from utils import LT_utils, B_utils
-import math
+from torch.cuda.amp import autocast, GradScaler
 
 def parse_args():
     parser = argparse.ArgumentParser(description='training')
@@ -267,6 +268,8 @@ def main_worker(gpu, ngpus_per_node, config, logger, model_dir):
         model = getattr(resnet_LT, config.backbone)()
     elif config.dataset == 'imagenetLT':
         model = getattr(resnet_IN, config.backbone)()
+    elif config.dataset == 'imagenet':
+        model = getattr(resnet_balancedIN, config.backbone)()
 
     if config.fixed_classifier:
         print('########   Using a fixed hyperspherical classifier with DL2PA  ##########')
@@ -304,6 +307,10 @@ def main_worker(gpu, ngpus_per_node, config, logger, model_dir):
         model = model.cuda(config.gpu)
         classifier = classifier.cuda(config.gpu)
 
+    else:
+        model = torch.nn.DataParallel(model).cuda()
+        classifier = torch.nn.DataParallel(classifier).cuda()
+
         # define loss function (criterion) and optimizer
     if config.fixed_classifier:
         criterion = nn.CosineSimilarity(eps=1e-9).cuda(config.gpu)
@@ -330,6 +337,10 @@ def main_worker(gpu, ngpus_per_node, config, logger, model_dir):
     elif config.dataset == 'imagenetLT':
         trainloader, testloader = dataset.ImageNet_LT(config.distributed, root=config.data_path,
                               batch_size=config.batch_size, num_works=config.workers)
+    elif config.dataset == 'imagenet':
+        trainloader, testloader = dataset.ImageNet(config.distributed, root=config.data_path,
+                              batch_size=config.batch_size, num_works=config.workers)
+        scaler = GradScaler()
 
     if config.distributed:
         train_sampler = dataset.dist_sampler
@@ -341,6 +352,18 @@ def main_worker(gpu, ngpus_per_node, config, logger, model_dir):
 
     lr = config.lr
     best_acc1 = -1.0
+
+    if config.dataset == 'imagenet':
+        main_lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+            optimizer, T_max=config.num_epochs - config.warmup_epochs  # , eta_min = 1e-5
+        )
+        warmup_lr_scheduler = torch.optim.lr_scheduler.LinearLR(
+            optimizer, start_factor=config.lr_warmup_decay, total_iters=config.warmup_epochs
+        )
+        scheduler = torch.optim.lr_scheduler.SequentialLR(
+            optimizer, schedulers=[warmup_lr_scheduler, main_lr_scheduler], milestones=[config.warmup_epochs]
+        )
+
     for epoch in range(config.num_epochs):
         if config.distributed:
             train_sampler.set_epoch(epoch)
@@ -367,7 +390,10 @@ def main_worker(gpu, ngpus_per_node, config, logger, model_dir):
                 param_group['lr'] = lr
 
         # train for one epoch
-        train(trainloader, model, classifier, criterion, optimizer, epoch, config, logger)
+        if config.dataset != 'imagenet':
+            train(trainloader, model, classifier, criterion, optimizer, epoch, config, logger)
+        else:
+            train(trainloader, model, classifier, criterion, optimizer, epoch, config, logger)
 
         # evaluate on validation set
         acc1, ece = validate(testloader, model, classifier, config, logger)

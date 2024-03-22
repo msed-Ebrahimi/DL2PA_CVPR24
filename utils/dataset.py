@@ -1,18 +1,15 @@
-import os
 import numpy as np
 import random
-from   six.moves import cPickle as pickle
 import torch
-import torch.optim as optim
 import torch.utils.data as data
-from   torchvision import datasets, transforms
+from torchvision import datasets, transforms
 from torch.utils.data import Dataset
 from PIL import Image
 import os
-import time
-import logging
-from pathlib import Path
-
+import pandas as pd
+from torchvision.transforms.functional import InterpolationMode
+import torchvision
+from torch.utils.data.dataloader import default_collate
 
 def load_cifar100(basedir, batch_size, kwargs):
     # Input channels normalization.
@@ -343,7 +340,6 @@ class LT_Dataset(Dataset):
             sample = self.transform(sample)
         return sample, target
 
-
 class LT_Dataset_Eval(Dataset):
     num_classes = 1000
 
@@ -564,6 +560,61 @@ def SVHN_LT(distributed, root='./data/cifar10', imb_type='exp', imb_factor=0.01,
 
     return train_instance, eval
 
+class ImageNetDataset(Dataset):
+    def __init__(self, root, part='train', transforms=None):
+        self.part = part
+        self.transforms = transforms
+        self.images = []
+        self.labels = []
+        self.labels = []
+        if part == 'train':
+            mycsv = pd.read_csv('./imagenet_train_val_csv/imagenet_train.csv')
+        else:
+            mycsv = pd.read_csv('./imagenet_train_val_csv/imagenet_val.csv')
+        for i in range(len(mycsv['image_id'])):
+            self.images.append(mycsv['image_id'][i][1:])
+            self.labels.append(int(mycsv['label'][i]))
+
+    def __len__(self):
+        return len(self.labels)
+
+    def __getitem__(self, index):
+        image = get_img(self.images[index])
+        if self.transforms is not None:
+            image = self.transforms(image)
+            # image = self.transforms(image=image)['image']
+        return image, self.labels[index]
+
+def ImageNet(distributed, root, batch_size, num_works, crop_size=244, resize_size=256):
+
+    train_dataset = ImageNetDataset(root, 'train', ClassificationPresetTrain(
+        crop_size=crop_size,
+        # auto_augment_policy=None,
+        auto_augment_policy="ta_wide",
+        random_erase_prob=0.1,
+    ), )
+
+    mixupcutmix = torchvision.transforms.RandomChoice([
+        transforms.RandomMixup(num_classes=1000, p=1.0, alpha=0.2),
+        transforms.RandomCutmix(num_classes=1000, p=1.0, alpha=1.0)
+    ])
+    collate_fn = lambda batch: mixupcutmix(*default_collate(batch))
+
+    train_loader = torch.utils.data.DataLoader(train_dataset,
+                                              batch_size=batch_size,
+                                              num_workers=num_works,
+                                              shuffle=True,
+                                              pin_memory=True,
+                                              collate_fn=collate_fn,
+                                              )
+
+    val_dataset = ImageNetDataset(root, 'val', ClassificationPresetEval(
+        crop_size=resize_size, resize_size=resize_size
+    ))
+    val_loader =  torch.utils.data.DataLoader(val_dataset, batch_size, num_workers=num_works, pin_memory=True)
+
+    return train_loader, val_loader
+
 class EffectNumSampler(torch.utils.data.sampler.Sampler):
     def __init__(self, dataset, indices=None, num_samples=None):
         # if indices is not provided,
@@ -663,4 +714,72 @@ class ClassAwareSampler(torch.utils.data.sampler.Sampler):
 def get_sampler():
     return ClassAwareSampler
 
+def get_img(path):
+    # im_bgr = cv2.imread(path)
+    # im_rgb = im_bgr[:, :, ::-1]
+    # return im_rgb
+    img = Image.open(path).convert('RGB')
+    return img
 
+
+
+class ClassificationPresetTrain:
+    def __init__(
+        self,
+        crop_size,
+        mean=(0.485, 0.456, 0.406),
+        std=(0.229, 0.224, 0.225),
+        interpolation=InterpolationMode.BILINEAR,
+        hflip_prob=0.5,
+        auto_augment_policy=None,
+        random_erase_prob=0.0,
+    ):
+        trans = [transforms.RandomResizedCrop(crop_size, interpolation=interpolation)]
+        if hflip_prob > 0:
+            trans.append(transforms.RandomHorizontalFlip(hflip_prob))
+        if auto_augment_policy is not None:
+            if auto_augment_policy == "ra":
+                trans.append(autoaugment.RandAugment(interpolation=interpolation))
+            elif auto_augment_policy == "ta_wide":
+                trans.append(autoaugment.TrivialAugmentWide(interpolation=interpolation))
+            else:
+                aa_policy = autoaugment.AutoAugmentPolicy(auto_augment_policy)
+                trans.append(autoaugment.AutoAugment(policy=aa_policy, interpolation=interpolation))
+        trans.extend(
+            [
+                transforms.PILToTensor(),
+                transforms.ConvertImageDtype(torch.float),
+                transforms.Normalize(mean=mean, std=std),
+            ]
+        )
+        if random_erase_prob > 0:
+            trans.append(transforms.RandomErasing(p=random_erase_prob))
+
+        self.transforms = transforms.Compose(trans)
+
+    def __call__(self, img):
+        return self.transforms(img)
+
+
+class ClassificationPresetEval:
+    def __init__(
+        self,
+        crop_size,
+        resize_size=256,
+        mean=(0.485, 0.456, 0.406),
+        std=(0.229, 0.224, 0.225),
+        interpolation=InterpolationMode.BILINEAR,
+    ):
+
+        self.transforms = transforms.Compose(
+            [
+                transforms.Resize(resize_size, interpolation=interpolation),
+                transforms.CenterCrop(crop_size),
+                transforms.PILToTensor(),
+                transforms.ConvertImageDtype(torch.float),
+                transforms.Normalize(mean=mean, std=std),
+            ]
+        )
+
+    def __call__(self, img):
+        return self.transforms(img)

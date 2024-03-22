@@ -1,0 +1,36 @@
+name: Res50_d512_imagenet
+print_freq: 40
+workers: 32
+log_dir: 'logs'
+model_dir: 'ckps'
+
+# dataset & model setting
+dataset: 'imagenet'
+data_path:  '/home/exx/PycharmProjects/hpn/data/' #'./data/cifar/cifar-10-batches-py/'
+num_classes: 1000
+backbone: 'resnet50'
+fixed_classifier: True
+space_dim: 512
+crop_size: 244
+resize_size: 256
+
+# distributed training
+deterministic: False
+distributed: False
+gpu: null
+world_size: -1
+rank: -1
+dist_url: 'tcp://224.66.41.62:23456'
+dist_backend: 'nccl'
+multiprocessing_distributed: False
+
+# Train
+lr: 0.5
+warmup_epochs: 5
+lr_warmup_decay: 0.01
+batch_size: 128
+weight_decay: 2e-5
+num_epochs: 105
+momentum: 0.9
+drop1: 100
+drop2: 200
