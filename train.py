@@ -205,7 +205,6 @@ def validate(val_loader, model, classifier, config, logger):
                     output = classifier(feat)
             else:
                 if config.dataset == 'imagenet':
-                    _, target = target.topk(1, 1, True, True)
                     feat = model(images)
                     if config.fixed_classifier:
                         output = classifier.module.predict(feat)
@@ -449,7 +448,10 @@ def main_worker(gpu, ngpus_per_node, config, logger, model_dir):
         acc1, ece = validate(testloader, model, classifier, config, logger)
 
         # hungarian
-        classifier.update_fixed_center()
+        if config.dataset == 'imagenet':
+            classifier.module.update_fixed_center()
+        else:
+            classifier.update_fixed_center()
 
         # remember best acc@1 and save checkpoint
         is_best = acc1 > best_acc1
@@ -459,7 +461,17 @@ def main_worker(gpu, ngpus_per_node, config, logger, model_dir):
         logger.info('Best Prec@1: %.3f%% \n' % (best_acc1))
 
         if config.fixed_classifier:
-            save_checkpoint({
+            if config.dataset == 'imagenet':
+                save_checkpoint({
+                    'epoch': epoch + 1,
+                    'state_dict_model': model.state_dict(),
+                    'state_dict_classifier': classifier.state_dict(),
+                    'polars': classifier.module.polars,
+                    'best_acc1': best_acc1,
+                    'its_ece': its_ece,
+                }, is_best, model_dir)
+            else:
+                save_checkpoint({
                 'epoch': epoch + 1,
                 'state_dict_model': model.state_dict(),
                 'state_dict_classifier': classifier.state_dict(),
