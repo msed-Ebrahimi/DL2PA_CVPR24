@@ -188,14 +188,6 @@ python train.py --cfg {path to config}
 
 ### Citation
 ```
-@inproceedings{
-anonymous2024hyperspherical,
-title={Hyperspherical Classification with Dynamic Label-to-Prototype Assignment},
-author={Anonymous},
-booktitle={Conference on Computer Vision and Pattern Recognition 2024},
-year={2024},
-url={https://openreview.net/forum?id=kgQZ3EmCvm}
-}
 ```
 
 ## Acknowledgments
