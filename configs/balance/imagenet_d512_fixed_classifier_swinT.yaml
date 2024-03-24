@@ -8,7 +8,7 @@ model_dir: 'ckps'
 dataset: 'imagenet'
 data_path:  '/home/exx/PycharmProjects/hpn/data/' #'./data/cifar/cifar-10-batches-py/'
 num_classes: 1000
-backbone: 'resnet50'
+backbone: 'swin_tiny_patch4_window7_224'
 fixed_classifier: True
 space_dim: 512
 crop_size: 244
@@ -32,3 +32,5 @@ batch_size: 1024
 weight_decay: 2e-5
 num_epochs: 105
 momentum: 0.9
+drop1: 100
+drop2: 200

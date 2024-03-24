@@ -19,7 +19,7 @@ import warnings
 from backbone.balanced.cifar100 import resnet as resnet32_balancedC100
 from backbone.balanced.imagenet200 import resnet as resnet32_balancedIN200
 import backbone.LT.resnet as resnet_LT
-from backbone.balanced.imagenet import resnet as resnet_balancedIN
+from backbone.balanced.imagenet import network as largenet
 import backbone.LT.resnetIN as resnet_IN
 from backbone.classifiers import fixed
 from backbone.classifiers import learnable
@@ -42,7 +42,7 @@ def parse_args():
 
     return args
 
-def train(train_loader, model, classifier, criterion, optimizer, epoch, config, logger):
+def train(train_loader, model, classifier, criterion, optimizer, epoch, config, logger,scheduler=None,scaler=None):
 
     batch_time = AverageMeter('Time', ':6.3f')
     data_time = AverageMeter('Data', ':6.3f')
@@ -101,25 +101,54 @@ def train(train_loader, model, classifier, criterion, optimizer, epoch, config, 
                 loss = LT_utils.mixup_criterion(criterion, output, targets_a, targets_b, lam)
             '''end long tail'''
         else:
-            P = classifier.polars[:, target].T
-            feat = model(images)
-            if config.fixed_classifier:
-                classifier.forward_momentum(feat.detach(), labels.detach())
-                loss = B_utils.BLoss(criterion, feat, P)
-                output = classifier.predict(feat)
+            if config.dataset == 'imagenet':
+                with autocast():
+                    P = classifier.polars[:, target].T
+                    feat = model(images)
+                    if config.fixed_classifier:
+                        classifier.forward_momentum(feat.detach(), labels.detach())
+                        loss = B_utils.BLoss(criterion, feat, P)
+                        output = classifier.predict(feat)
+                    else:
+                        output = classifier(feat)
+                        loss = criterion(output, target)
+
+                # compute gradient and do SGD step
+                if scaler is not None:
+                    scaler.step(optimizer)
+                    scaler.update()
+                    optimizer.zero_grad()
+                else:
+                    optimizer.zero_grad()
+                    loss.backward()
+                    optimizer.step()
+                # adjust learning rate
+                if scheduler is not None:
+                    scheduler.step()
             else:
-                output = classifier(feat)
-                loss = criterion(output, target)
+                P = classifier.polars[:, target].T
+                feat = model(images)
+                if config.fixed_classifier:
+                    classifier.forward_momentum(feat.detach(), labels.detach())
+                    loss = B_utils.BLoss(criterion, feat, P)
+                    output = classifier.predict(feat)
+                else:
+                    output = classifier(feat)
+                    loss = criterion(output, target)
+                # compute gradient and do SGD step
+                if scaler is not None:
+                    scaler.step(optimizer)
+                    scaler.update()
+                    optimizer.zero_grad()
+                else:
+                    optimizer.zero_grad()
+                    loss.backward()
+                    optimizer.step()
 
         acc1, acc5 = accuracy(output, labels.cuda(config.gpu, non_blocking=True), topk=(1, 5))
         losses.update(loss.item(), images.size(0))
         top1.update(acc1[0], images.size(0))
         top5.update(acc5[0], images.size(0))
-
-        # compute gradient and do SGD step
-        optimizer.zero_grad()
-        loss.backward()
-        optimizer.step()
 
         # measure elapsed time
         batch_time.update(time.time() - end)
@@ -127,6 +156,9 @@ def train(train_loader, model, classifier, criterion, optimizer, epoch, config, 
 
         if i % config.print_freq == 0:
             progress.display(i, logger)
+
+    if scheduler is not None:
+        scheduler.step()
 
 def validate(val_loader, model, classifier, config, logger):
     batch_time = AverageMeter('Time', ':6.3f')
@@ -269,7 +301,7 @@ def main_worker(gpu, ngpus_per_node, config, logger, model_dir):
     elif config.dataset == 'imagenetLT':
         model = getattr(resnet_IN, config.backbone)()
     elif config.dataset == 'imagenet':
-        model = getattr(resnet_balancedIN, config.backbone)()
+        model = getattr(largenet, config.backbone)()
 
     if config.fixed_classifier:
         print('########   Using a fixed hyperspherical classifier with DL2PA  ##########')
@@ -345,10 +377,15 @@ def main_worker(gpu, ngpus_per_node, config, logger, model_dir):
     if config.distributed:
         train_sampler = dataset.dist_sampler
 
-    optimizer = torch.optim.SGD([{"params": model.parameters()},
+    if config.backbone != 'swin_tiny_patch4_window7_224':
+        optimizer = torch.optim.SGD([{"params": model.parameters()},
                                     {"params": classifier.parameters()}], config.lr,
                                     momentum=config.momentum,
                                     weight_decay=config.weight_decay)
+    else:
+        optimizer = torch.optim.AdamW([{"params": model.parameters()},
+                                    {"params": classifier.parameters()}], lr=config.lr,
+                                      weight_decay=config.weight_decay)
 
     lr = config.lr
     best_acc1 = -1.0
@@ -363,6 +400,7 @@ def main_worker(gpu, ngpus_per_node, config, logger, model_dir):
         scheduler = torch.optim.lr_scheduler.SequentialLR(
             optimizer, schedulers=[warmup_lr_scheduler, main_lr_scheduler], milestones=[config.warmup_epochs]
         )
+        scaler = GradScaler()
 
     for epoch in range(config.num_epochs):
         if config.distributed:
@@ -393,7 +431,7 @@ def main_worker(gpu, ngpus_per_node, config, logger, model_dir):
         if config.dataset != 'imagenet':
             train(trainloader, model, classifier, criterion, optimizer, epoch, config, logger)
         else:
-            train(trainloader, model, classifier, criterion, optimizer, epoch, config, logger)
+            train(trainloader, model, classifier, criterion, optimizer, epoch, config, logger,scheduler,scaler)
 
         # evaluate on validation set
         acc1, ece = validate(testloader, model, classifier, config, logger)
