@@ -28,7 +28,7 @@ _C.tail_class_idx = [0, 1]
 _C.crop_size = -1
 _C.resize_size = -1
 _C.warmup_epochs = -1
-_C.lr_warmup_decay = -1
+_C.lr_warmup_decay = -1.0
 
 _C.deterministic = True
 _C.gpu = 0

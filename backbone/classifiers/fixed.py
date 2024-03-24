@@ -57,7 +57,6 @@ class fixed_Classifier(nn.Module):
     def forward_momentum(self, x, labels_a, lam=1):
         with torch.no_grad():
             x = F.normalize(x, p=2, dim=1)
-
             self.queue[labels_a, :] += 0.9 * self.queue[labels_a, :] + (1 - 0.9) * lam * x
             self.queue = self.queue / torch.clamp(torch.sqrt(torch.sum(self.queue ** 2, dim=1, keepdims=True)), 1e-8)
 

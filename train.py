@@ -99,22 +99,29 @@ def train(train_loader, model, classifier, criterion, optimizer, epoch, config, 
                 feat = model(images)
                 output = classifier(feat)
                 loss = LT_utils.mixup_criterion(criterion, output, targets_a, targets_b, lam)
+
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
             '''end long tail'''
         else:
             if config.dataset == 'imagenet':
+                _, target = target.topk(1, 1, True, True)
+                labels = target
                 with autocast():
-                    P = classifier.polars[:, target].T
+                    P = classifier.module.polars[:, target].T
                     feat = model(images)
                     if config.fixed_classifier:
-                        classifier.forward_momentum(feat.detach(), labels.detach())
+                        classifier.module.forward_momentum(feat.detach(), target.squeeze(1).detach())
                         loss = B_utils.BLoss(criterion, feat, P)
-                        output = classifier.predict(feat)
+                        output = classifier.module.predict(feat)
                     else:
                         output = classifier(feat)
                         loss = criterion(output, target)
 
                 # compute gradient and do SGD step
                 if scaler is not None:
+                    scaler.scale(loss).backward()
                     scaler.step(optimizer)
                     scaler.update()
                     optimizer.zero_grad()
@@ -137,6 +144,7 @@ def train(train_loader, model, classifier, criterion, optimizer, epoch, config, 
                     loss = criterion(output, target)
                 # compute gradient and do SGD step
                 if scaler is not None:
+                    scaler.scale(loss).backward()
                     scaler.step(optimizer)
                     scaler.update()
                     optimizer.zero_grad()
@@ -186,7 +194,6 @@ def validate(val_loader, model, classifier, config, logger):
                 images = images.cuda(config.gpu, non_blocking=True)
             if torch.cuda.is_available():
                 target = target.cuda(config.gpu, non_blocking=True)
-            labels = target.clone()
 
             if config.dataset.endswith('LT'):
                 if config.fixed_classifier:
@@ -196,19 +203,24 @@ def validate(val_loader, model, classifier, config, logger):
                 else:
                     feat = model(images)
                     output = classifier(feat)
-
             else:
-                feat = model(images)
-                if config.fixed_classifier:
-                    output = classifier.predict(feat)
+                if config.dataset == 'imagenet':
+                    _, target = target.topk(1, 1, True, True)
+                    feat = model(images)
+                    if config.fixed_classifier:
+                        output = classifier.module.predict(feat)
+                else:
+                    feat = model(images)
+                    if config.fixed_classifier:
+                        output = classifier.predict(feat)
 
             # measure accuracy and record loss
-            acc1, acc5 = accuracy(output, labels, topk=(1, 5))
+            acc1, acc5 = accuracy(output, target, topk=(1, 5))
             top1.update(acc1[0], images.size(0))
             top5.update(acc5[0], images.size(0))
 
             _, predicted = output.max(1)
-            target_one_hot = F.one_hot(labels, config.num_classes)
+            target_one_hot = F.one_hot(target, config.num_classes)
             predict_one_hot = F.one_hot(predicted, config.num_classes)
             class_num = class_num + target_one_hot.sum(dim=0).to(torch.float)
             correct = correct + (target_one_hot + predict_one_hot == 2).sum(dim=0).to(torch.float)
@@ -217,7 +229,7 @@ def validate(val_loader, model, classifier, config, logger):
             confidence_part, pred_class_part = torch.max(prob, dim=1)
             confidence = np.append(confidence, confidence_part.cpu().numpy())
             pred_class = np.append(pred_class, pred_class_part.cpu().numpy())
-            true_class = np.append(true_class, labels.cpu().numpy())
+            true_class = np.append(true_class, target.cpu().numpy())
 
             # measure elapsed time
             batch_time.update(time.time() - end)
@@ -301,7 +313,7 @@ def main_worker(gpu, ngpus_per_node, config, logger, model_dir):
     elif config.dataset == 'imagenetLT':
         model = getattr(resnet_IN, config.backbone)()
     elif config.dataset == 'imagenet':
-        model = getattr(largenet, config.backbone)()
+        model = getattr(largenet, 'net')(output_dim= config.space_dim, model_name=config.backbone)
 
     if config.fixed_classifier:
         print('########   Using a fixed hyperspherical classifier with DL2PA  ##########')
