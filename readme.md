@@ -7,32 +7,28 @@ DL2PA: Hyperspherical Classification with Dynamic Label-to-Prototype Assignment 
 - Supplementary: [supp.pdf](assets/supp.pdf)
 
 The repository includes:
-* pre-computed prototypes.
+* Precomputed prototypes.
 * Script to construct your own prototypes.
 * Balanced classification scripts for CIFAR-10, CIFAR-100, ImageNet-200, and ImageNet-1K (ResNet and Swin).
-* Long-tailed classification scripts for CIFAR-10LT, CIFAR-100LT, SVHNLT, STL-10LT, and ImageNet-1kLT.
+* Long-tailed classification scripts for CIFAR-10, CIFAR-100, SVHN, STL-10, and ImageNet-1k.
 
 ### Pipepline
 ![Demo](assets/3.jpg)
 ### Hyperspherical Prototype Estimation
-![Demo](assets/2.jpg)
-
-### Precomputed Prototypes 
-Please find the estimated prototype in [link](Estimated_prototypes/)
-
-### Estimate prototypes 
 One can also generate prototypes with desired dimension:
 ```
 python Prototype_Estimation.py --seed 100 --num_centroids 100 --batch_size 100 --space_dim 50 --num_epoch 1000
 ```
+
+### Precomputed Prototypes 
+Please find the estimated prototype in [link](Estimated_prototypes/)
+
 
 ### Training classifier
 The configs can be found in ./config/Blanced or LongTail/FILENAME.yaml.
 ```
 python train.py --cfg {path to config}
 ```
-
-Here's a more professional and scientific version of your README.md section:
 
 ---
 
@@ -86,11 +82,11 @@ Here's a more professional and scientific version of your README.md section:
 
 #### CIFAR-100 LT Classification Accuracy (%)
 
-| Method |  $d$  | 0.005  | 0.01   | 0.02   |
-|--------|:-----:|:------:|:------:|:------:|
-| PSC    |  128  |  38.7  |  43.0  |  48.1  |
-| ETF    |  128  | *40.9* | **45.3** |  50.4  |
-| **Ours** |  128  | **41.3** |  44.9  | *50.7* |
+| Method |  d  | 0.005  | 0.01   | 0.02   |
+|--------|:---:|:------:|:------:|:------:|
+| PSC    | 128 |  38.7  |  43.0  |  48.1  |
+| ETF    | 128 | *40.9* | **45.3** |  50.4  |
+| **Ours** | 128 | **41.3** |  44.9  | *50.7* |
 
 
 
