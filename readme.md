@@ -32,55 +32,148 @@ python train.py --cfg {path to config}
 
 ---
 
-## Benchmark Results
 
-### Balanced Classification Results
 
-#### CIFAR-10 Classification Accuracy (%)
+## Balanced Classification Results
 
-| Method   |   d=10   |   d=25   |   d=50   |   d=100  |
-|----------|:--------:|:--------:|:--------:|:--------:|
-| PSC      |   25.67  |   60.0   |   60.6   |   62.1   |
-| Word2Vec |   29.0   |   44.5   |   54.3   |   57.6   |
-| HPN      |   51.1   |   63.0   |   64.7   | **65.0** |
-| **Ours** | **57.21**| **64.63**| **66.22**|   62.85  |
+<table>
+  <tr>
+    <th rowspan="2">Method</th>
+    <th colspan="4">CIFAR-10</th>
+    <th colspan="4">ImageNet-200</th>
+  </tr>
+  <tr>
+    <td>d=10</td>
+    <td>d=25</td>
+    <td>d=50</td>
+    <td>d=100</td>
+    <td>d=25</td>
+    <td>d=50</td>
+    <td>d=100</td>
+    <td>d=200</td>
+  </tr>
+  <tr>
+    <td>PSC</td>
+    <td>25.67</td>
+    <td>60.0</td>
+    <td>60.6</td>
+    <td>62.1</td>
+    <td>60.0</td>
+    <td>60.6</td>
+    <td>62.1</td>
+    <td>33.1</td>
+  </tr>
+  <tr>
+    <td>Word2Vec</td>
+    <td>29.0</td>
+    <td>44.5</td>
+    <td>54.3</td>
+    <td>57.6</td>
+    <td>44.5</td>
+    <td>54.3</td>
+    <td>57.6</td>
+    <td>30.0</td>
+  </tr>
+  <tr>
+    <td>HPN</td>
+    <td>51.1</td>
+    <td>63.0</td>
+    <td>64.7</td>
+    <td><b>65.0</b></td>
+    <td>63.0</td>
+    <td>64.7</td>
+    <td><b>65.0</b></td>
+    <td><b>44.7</b></td>
+  </tr>
+  <tr>
+    <td><b>Ours</b></td>
+    <td><b>57.21</b></td>
+    <td><b>64.63</b></td>
+    <td><b>66.22</b></td>
+    <td>62.85</td>
+    <td><b>64.63</b></td>
+    <td><b>66.22</b></td>
+    <td>62.85</td>
+    <td>37.28</td>
+  </tr>
+</table>
 
-#### ImageNet-200 Classification Accuracy (%)
 
-| Method   |   d=25   |   d=50   |   d=100  |   d=200  |
-|----------|:--------:|:--------:|:--------:|:--------:|
-| PSC      |   60.0   |   60.6   |   62.1   |   33.1   |
-| Word2Vec |   44.5   |   54.3   |   57.6   |   30.0   |
-| HPN      |   63.0   |   64.7   | **65.0** | **44.7** |
-| **Ours** | **64.63**| **66.22**|   62.85  |   37.28  |
+#### ImageNet-1K Classification Accuracy (%) when $d=512$:
 
-#### ImageNet-1K Classification Accuracy (%) when $d=512$
-
-| Method               | Venue      | Backbone   | Optimizer | Accuracy (%) |
-|----------------------|------------|------------|-----------|--------------|
-| PSC                  | CVPR 2016  | ResNet-50  | SGD       | 76.51        |
-| DNC                  | ICLR 2022  | ResNet-50  | SGD       | 76.49        |
-| Goto et al.          | WACV 2024  | ResNet-50  | SGD       | 77.19        |
+| Method               | Venue        | Backbone   | Optimizer | Accuracy (%) |
+|----------------------|--------------|------------|-----------|--------------|
+| PSC                  | CVPR 2016    | ResNet-50  | SGD       | 76.51        |
+| DNC                  | ICLR 2022    | ResNet-50  | SGD       | 76.49        |
+| Goto et al.          | WACV 2024    | ResNet-50  | SGD       | 77.19        |
 | Kasarla et al.       | NeurIPS 2022 | ResNet-50  | SGD       | 74.80        |
-| **Ours**             | -          | ResNet-50  | SGD       | **77.47**    |
-| DNC                  | ICLR 2022  | ResNet-101 | SGD       | 77.80        |
-| Goto et al.          | WACV 2024  | ResNet-101 | SGD       | 78.27        |
+| **Ours**             | CVPR 2024    | ResNet-50  | SGD       | **77.47**    |
+| DNC                  | ICLR 2022    | ResNet-101 | SGD       | 77.80        |
+| Goto et al.          | WACV 2024    | ResNet-101 | SGD       | 78.27        |
 | Kasarla et al.       | NeurIPS 2022 | ResNet-152 | SGD       | 78.50       |
-| **Ours**             | -          | ResNet-101 | SGD       | **79.63**    |
-| PSC                  | CVPR 2016  | Swin-T     | AdamW     | 76.91        |
-| **Ours**             | -          | Swin-T     | AdamW     | **77.26**    |
+| **Ours**             | CVPR 2024            | ResNet-101 | SGD       | **79.63**    |
+| PSC                  | CVPR 2016    | Swin-T     | AdamW     | 76.91        |
+| **Ours**             | CVPR 2024          | Swin-T     | AdamW     | **77.26**    |
 
-### Long-tailed Classification Results
+## Long-tailed Classification Results
 
-#### CIFAR-10 LT Classification Accuracy (%) with $d=64$
+<table>
+  <tr>
+    <th rowspan="2">Method</th>
+    <th colspan="3">CIFAR-10 LT (d=64)</th>
+    <th colspan="3">SVHN LT (d=64)</th>
+    <th colspan="3">STL-10 LT (d=64)</th>
+  </tr>
+  <tr>
+    <td>0.005</td>
+    <td>0.01</td>
+    <td>0.02</td>
+    <td>0.005</td>
+    <td>0.01</td>
+    <td>0.02</td>
+    <td>0.005</td>
+    <td>0.01</td>
+    <td>0.02</td>
+  </tr>
+  <tr>
+    <td>PSC</td>
+    <td>67.3</td>
+    <td>72.8</td>
+    <td>78.6</td>
+    <td>40.5</td>
+    <td>40.9</td>
+    <td>49.3</td>
+    <td>33.1</td>
+    <td><b>37.9</b></td>
+    <td><b>38.8</b></td>
+  </tr>
+  <tr>
+    <td>ETF</td>
+    <td><b>71.9</b></td>
+    <td>76.5</td>
+    <td>81.0</td>
+    <td><b>42.8</b></td>
+    <td>45.7</td>
+    <td><b>49.8</b></td>
+    <td>33.5</td>
+    <td>37.2</td>
+    <td>37.9</td>
+  </tr>
+  <tr>
+    <td>Ours</td>
+    <td>71.5</td>
+    <td><b>76.9</b></td>
+    <td><b>81.4</b></td>
+    <td>40.9</td>
+    <td><b>47.0</b></td>
+    <td>49.7</td>
+    <td><b>35.7</b></td>
+    <td>35.6</td>
+    <td>38.0</td>
+  </tr>
+</table>
 
-| Method | 0.005  | 0.01   | 0.02   |
-|--------|:------:|:------:|:------:|
-| PSC    |  67.3  |  72.8  |  78.6  |
-| ETF    |**71.9**|  76.5  |  81.0  |
-| **Ours**|  71.5  |**76.9**|**81.4**|
-
-#### CIFAR-100 LT Classification Accuracy (%)
+#### CIFAR-100 LT Classification Accuracy (%):
 
 | Method |  d  | 0.005  | 0.01   | 0.02   |
 |--------|:---:|:------:|:------:|:------:|
