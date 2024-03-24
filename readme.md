@@ -14,9 +14,7 @@ Comparison of the proposed method with the conventional PSC and the previous fix
 a) Label-to-prototype assignment remains static during training. In PSC, optimization focuses on the network, consisting of the backbone and prototypes **W** . In the case of a fixed classifier, only the backbone is optimized, and prototypes remain fixed.
 b) In the proposed method, prototypes within the hypersphere are fixed, and optimization targets the backbone and the label that each prototype represents.
 c) Toy example showing changes in label-to-prototype assignment during training.
-- Arxiv: 
-- Main paper: [main.pdf](assets/main.pdf)
-- Supplementary: [supp.pdf](assets/supp.pdf)
+
 
 ## Table of Contents
 - [Usage](#usage)
