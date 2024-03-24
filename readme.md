@@ -2,37 +2,42 @@
 Official repository for the paper
 DL2PA: Hyperspherical Classification with Dynamic Label-to-Prototype Assignment (CVPR 2024).
 
+## Abstract
+Aiming to enhance the utilization of metric space by the parametric softmax classifier, recent studies suggest replacing it with a non-parametric alternative.
+Although a non-parametric classifier may provide better metric space utilization, it introduces the challenge of capturing inter-class relationships. A shared characteristic among prior non-parametric classifiers is the static assignment of labels to prototypes during the training, i.e., each prototype consistently represents a class throughout the training course.
+Orthogonal to previous works, we present a simple yet effective method to optimize the category assigned to each prototype (label-to-prototype assignment) during the training. To this aim, we formalize the problem as a two-step optimization objective over network parameters and label-to-prototype assignment mapping. We solve this optimization using a sequential combination of gradient descent and Bipartide matching.
+We demonstrate the benefits of the proposed approach by conducting experiments on balanced and long-tail classification problems using different backbone network architectures.
+In particular, our method outperforms its competitors by 1.22% accuracy on CIFAR-100, and 2.15% on ImageNet-200 using a metric space dimension half of the size of its competitors.
+
+![Demo](assets/1.jpg)
+Comparison of the proposed method with the conventional PSC and the previous fixed classifier setup, using a toy example with three classes. Each color denotes a distinct class.
+a) Label-to-prototype assignment remains static during training. In PSC, optimization focuses on the network, consisting of the backbone and prototypes **W** . In the case of a fixed classifier, only the backbone is optimized, and prototypes remain fixed.
+b) In the proposed method, prototypes within the hypersphere are fixed, and optimization targets the backbone and the label that each prototype represents.
+c) Toy example showing changes in label-to-prototype assignment during training.
 - Arxiv: 
 - Main paper: [main.pdf](assets/main.pdf)
 - Supplementary: [supp.pdf](assets/supp.pdf)
 
-The repository includes:
-* Precomputed prototypes.
-* Script to construct your own prototypes.
-* Balanced classification scripts for CIFAR-10, CIFAR-100, ImageNet-200, and ImageNet-1K (ResNet and Swin).
-* Long-tailed classification scripts for CIFAR-10, CIFAR-100, SVHN, STL-10, and ImageNet-1k.
+## Table of Contents
+- [Usage](#usage)
+- [Balanced Classification Results](#balanced-classification-results)
+- [Long-tailed Classification Results](#long-tailed-classification-results)
+- [Citation](#citation)
+- [Acknowledgments](#acknowledgments)
 
-### Pipepline
-![Demo](assets/3.jpg)
-### Hyperspherical Prototype Estimation
-One can also generate prototypes with desired dimension:
+
+## Usage
+### Prototype Estimation
+One can generate equidistributed prototypes with desired dimension:
 ```
 python Prototype_Estimation.py --seed 100 --num_centroids 100 --batch_size 100 --space_dim 50 --num_epoch 1000
 ```
-
-### Precomputed Prototypes 
-Please find the estimated prototype in [link](Estimated_prototypes/)
-
-
+Also, you can find the estimated prototype in [link](Estimated_prototypes/)
 ### Training classifier
 The configs can be found in ./config/Blanced or LongTail/FILENAME.yaml.
 ```
 python train.py --cfg {path to config}
 ```
-
----
-
-
 
 ## Balanced Classification Results
 
