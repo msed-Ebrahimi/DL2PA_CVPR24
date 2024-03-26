@@ -1,13 +1,13 @@
 # DL2PA: Hyperspherical Classification with Dynamic Label-to-Prototype Assignment
 Official repository for the paper
-DL2PA: Hyperspherical Classification with Dynamic Label-to-Prototype Assignment (CVPR 2024).
+DL2PA: Hyperspherical Classification with Dynamic Label-to-Prototype Assignment (CVPR 2024). [arxive](https://arxiv.org/abs/2403.16937)
 
 ## Abstract
 Aiming to enhance the utilization of metric space by the parametric softmax classifier, recent studies suggest replacing it with a non-parametric alternative.
 Although a non-parametric classifier may provide better metric space utilization, it introduces the challenge of capturing inter-class relationships. A shared characteristic among prior non-parametric classifiers is the static assignment of labels to prototypes during the training, i.e., each prototype consistently represents a class throughout the training course.
 Orthogonal to previous works, we present a simple yet effective method to optimize the category assigned to each prototype (label-to-prototype assignment) during the training. To this aim, we formalize the problem as a two-step optimization objective over network parameters and label-to-prototype assignment mapping. We solve this optimization using a sequential combination of gradient descent and Bipartide matching.
 We demonstrate the benefits of the proposed approach by conducting experiments on balanced and long-tail classification problems using different backbone network architectures.
-In particular, our method outperforms its competitors by 1.22% accuracy on CIFAR-100, and 2.15% on ImageNet-200 using a metric space dimension half of the size of its competitors.
+In particular, our method outperforms its competitors by 1.22% accuracy on CIFAR-100, and 2.15% on ImageNet-200 using a metric space dimension half of the size of its competitors. 
 
 ![Demo](assets/1.jpg)
 Comparison of the proposed method with the conventional PSC and the previous fixed classifier setup, using a toy example with three classes. Each color denotes a distinct class.
