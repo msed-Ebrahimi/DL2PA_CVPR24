@@ -1,6 +1,6 @@
 # DL2PA: Hyperspherical Classification with Dynamic Label-to-Prototype Assignment
 Official repository for the paper
-DL2PA: Hyperspherical Classification with Dynamic Label-to-Prototype Assignment (CVPR 2024). [arxive](https://arxiv.org/abs/2403.16937)
+DL2PA: Hyperspherical Classification with Dynamic Label-to-Prototype Assignment (CVPR 2024). [Arxive](https://arxiv.org/abs/2403.16937)
 
 ## Abstract
 Aiming to enhance the utilization of metric space by the parametric softmax classifier, recent studies suggest replacing it with a non-parametric alternative.
