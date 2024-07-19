@@ -188,13 +188,13 @@ python train.py --cfg {path to config}
 
 ### Citation
 ```
-@misc{saadabadi2024hyperspherical,
-    title={Hyperspherical Classification with Dynamic Label-to-Prototype Assignment},
-    author={Mohammad Saeed Ebrahimi Saadabadi and Ali Dabouei and Sahar Rahimi Malakshan and Nasser M. Nasrabad},
-    year={2024},
-    eprint={2403.16937},
-    archivePrefix={arXiv},
-    primaryClass={cs.CV}
+@InProceedings{Saadabadi_2024_CVPR,
+    author    = {Saadabadi, Mohammad Saeed Ebrahimi and Dabouei, Ali and Malakshan, Sahar Rahimi and Nasrabadi, Nasser M.},
+    title     = {Hyperspherical Classification with Dynamic Label-to-Prototype Assignment},
+    booktitle = {Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR)},
+    month     = {June},
+    year      = {2024},
+    pages     = {17333-17342}
 }
 ```
 
