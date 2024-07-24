@@ -42,7 +42,7 @@ python train.py --cfg {path to config}
 <table>
   <tr>
     <th rowspan="2">Method</th>
-    <th colspan="4">CIFAR-10</th>
+    <th colspan="4">CIFAR-100</th>
     <th colspan="4">ImageNet-200</th>
   </tr>
   <tr>
